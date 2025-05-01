@@ -28,6 +28,7 @@ var materialTextura = new THREE.MeshStandardMaterial({color: 0x000000});
 var meshCubo = new THREE.Mesh(gerometriaCubo,materialTextura);
 meshCubo.castShadow = true;
 meshCubo.translateZ(-10);
+meshCubo.translateX(-10);
 
 // Adiciona bordas ao cubo
 var edges = new THREE.EdgesGeometry(gerometriaCubo);
@@ -50,7 +51,7 @@ tiltedPlaneMaterial.shadowSide = THREE.BackSide;
 var tiltedPlane = new THREE.Mesh(tiltedPlaneGeometry, tiltedPlaneMaterial);
 tiltedPlane.rotation.x = -Math.PI / 2;
 tiltedPlane.rotation.y = Math.PI / 12;
-tiltedPlane.position.set(0,1, -10);
+tiltedPlane.position.set(0, 1, -10);
 tiltedPlane.receiveShadow = true;
 tiltedPlane.castShadow = true;
 cena.add(tiltedPlane);
@@ -60,50 +61,6 @@ var planeEdges = new THREE.EdgesGeometry(planeGeometry);
 var planeEdgeMaterial = new THREE.LineBasicMaterial({ color: 0xffffff,linewidth: 10 });
 var planeEdgeLines = new THREE.LineSegments(planeEdges, planeEdgeMaterial);
 plane.add(planeEdgeLines);
-
-//Cria o barril
-var barrelBodyGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1.5, 32);
-var barrelBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
-var barrelBody = new THREE.Mesh(barrelBodyGeometry, barrelBodyMaterial);
-barrelBody.castShadow = true;
-barrelBody.receiveShadow = true;
-
-// cria os aros
-var bandGeometry = new THREE.TorusGeometry(0.5, 0.05, 16, 100);
-var bandMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
-
-var topBand = new THREE.Mesh(bandGeometry, bandMaterial);
-topBand.rotation.x = Math.PI / 2; 
-topBand.position.y = 0.7; 
-topBand.castShadow = true;
-var middleBand = new THREE.Mesh(bandGeometry, bandMaterial);
-middleBand.rotation.x = Math.PI / 2;
-middleBand.position.y = 0;
-middleBand.castShadow = true;
-var bottomBand = new THREE.Mesh(bandGeometry, bandMaterial);
-bottomBand.rotation.x = Math.PI / 2;
-bottomBand.position.y = -0.7;
-bottomBand.castShadow = true;
-
-var barrel = new THREE.Group();
-barrel.add(barrelBody);
-barrel.add(topBand);
-barrel.add(middleBand);
-barrel.add(bottomBand);
-
-var textureLoader = new THREE.TextureLoader();
-var woodTexture = textureLoader.load('./Texturas/woodBarreltexture.jpg');
-var metalTexture = textureLoader.load('./Texturas/rustyMetalTexture.jpg');
-
-barrelBodyMaterial.map = woodTexture;
-bandMaterial.map = metalTexture;
-
-barrel.scale.set(1, 1, 1);
-barrel.rotation.y = Math.PI / 2;
-barrel.rotation.z = Math.PI / 2;
-
-barrel.position.set(-7, 7, -10); 
-cena.add(barrel);
 
 //Funcao que trata de importar modelos e animaçoes
 importer.load('Objetos/marioModel.fbx', function (object) {
@@ -120,7 +77,6 @@ importer.load('Objetos/marioModel.fbx', function (object) {
     });
 
     cena.add(object);
-
 
     object.scale.x = 0.01;
     object.scale.y = 0.01;
@@ -191,54 +147,116 @@ function applyGravity() {
 
 let barrelVelocityY = 0; 
 const barrelGravity = 0.02;
-const barrelFloorLevel = plane.position.y + 0.75; 
 
+function applyBarrelPhysics() {
+    barrels.forEach((barrel, index) => {
+        // Create a raycaster
+        const raycaster = new THREE.Raycaster();
+        const downDirection = new THREE.Vector3(0, -1, 0); // Ray points downward
 
-function applyBarrelGravity() {
-   
-    const closestPlane = getClosestPlane(barrel);
+        // Set the raycaster's origin and direction
+        raycaster.set(barrel.position, downDirection);
 
-    if (closestPlane) {
-       
-        const floorLevel = closestPlane.position.y +
-            Math.tan(closestPlane.rotation.x) * (barrel.position.z - closestPlane.position.z) +
-            Math.tan(closestPlane.rotation.z) * (barrel.position.x - closestPlane.position.x);
+        // Check for intersections with planes
+        const intersects = raycaster.intersectObjects(planes, true); // 'planes' is an array of all planes
 
-        
-        const barrelBoundingBox = new THREE.Box3().setFromObject(barrel);
-        const barrelBottomY = barrelBoundingBox.min.y;
+        if (intersects.length > 0) {
+            // Get the closest intersected object
+            const intersection = intersects[0];
+            const floorLevel = intersection.point.y; // Y-coordinate of the intersection point
+            const intersectedPlane = intersection.object;
 
-        if (barrelBottomY > floorLevel || barrelVelocityY > 0) {
-            barrelVelocityY -= barrelGravity;
+            // Calculate the barrel's bottom position
+            const barrelBoundingBox = new THREE.Box3().setFromObject(barrel);
+            const barrelBottomY = barrelBoundingBox.min.y;
+
+            // Apply gravity
+            if (barrelBottomY > floorLevel || barrelVelocityY > 0) {
+                barrelVelocityY -= barrelGravity; // Apply gravity
+            } else {
+                barrel.position.y += floorLevel - barrelBottomY; // Clamp to floor level
+                barrelVelocityY = 0; // Stop vertical movement
+            }
+
+            // Update the barrel's vertical position
+            barrel.position.y += barrelVelocityY;
+
+            // Check the tilt of the intersected plane
+            const tiltAngleX = THREE.MathUtils.radToDeg(intersectedPlane.rotation.x);
+            const tiltAngleZ = THREE.MathUtils.radToDeg(intersectedPlane.rotation.z);
+
+            // Apply rolling motion if the tilt exceeds 10 degrees
+            if (Math.abs(tiltAngleX) > 10) {
+                const rollAccelerationZ = Math.sin(intersectedPlane.rotation.y) * 0.2; // Adjust rolling speed
+                barrel.position.x += rollAccelerationZ;
+                //barrel.rotation.x += rollAccelerationZ / 0.5; // Simulate rolling
+            }
+
+            if (Math.abs(tiltAngleZ) > 10) {
+                const rollAccelerationX = Math.sin(intersectedPlane.rotation.z) * 0.05; // Adjust rolling speed
+                barrel.position.x += rollAccelerationX;
+//                //barrel.rotation.z += rollAccelerationX / 0.5; // Simulate rolling
+            }
         } else {
-            barrel.position.y += floorLevel - barrelBottomY;
-            barrelVelocityY = 0; 
+            // If no intersection, let the barrel fall indefinitely
+            barrelVelocityY -= barrelGravity;
+            barrel.position.y += barrelVelocityY;
         }
 
-        barrel.position.y += barrelVelocityY;
-    }
-}
-
-function getClosestPlane(barrel) {
-    let closestPlane = null;
-    let closestDistance = Infinity;
-
-    planes.forEach((plane) => {
-     
-        const planeY = plane.position.y +
-            Math.tan(plane.rotation.x) * (barrel.position.z - plane.position.z) +
-            Math.tan(plane.rotation.z) * (barrel.position.x - plane.position.x);
-
-        const distance = barrel.position.y - planeY;
-
-        if (distance >= 0 && distance < closestDistance) {
-            closestDistance = distance;
-            closestPlane = plane;
+        // Destroy the barrel if it falls below the floor
+        if (barrel.position.y < 0) {
+            cena.remove(barrel); // Remove barrel from the scene
+            barrels.splice(index, 1); // Remove barrel from the array
         }
     });
-
-    return closestPlane;
 }
+
+const barrels = []; // Array to store all barrels
+
+function spawnBarrel() {
+    // Create a new barrel
+    const barrelBodyGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1.5, 32);
+    const barrelBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+    const barrelBody = new THREE.Mesh(barrelBodyGeometry, barrelBodyMaterial);
+    barrelBody.castShadow = true;
+    barrelBody.receiveShadow = true;
+
+    const bandGeometry = new THREE.TorusGeometry(0.5, 0.05, 16, 100);
+    const bandMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
+
+    const topBand = new THREE.Mesh(bandGeometry, bandMaterial);
+    topBand.rotation.x = Math.PI / 2;
+    topBand.position.y = 0.7;
+    topBand.castShadow = true;
+
+    const middleBand = new THREE.Mesh(bandGeometry, bandMaterial);
+    middleBand.rotation.x = Math.PI / 2;
+    middleBand.position.y = 0;
+    middleBand.castShadow = true;
+
+    const bottomBand = new THREE.Mesh(bandGeometry, bandMaterial);
+    bottomBand.rotation.x = Math.PI / 2;
+    bottomBand.position.y = -0.7;
+    bottomBand.castShadow = true;
+
+    const barrel = new THREE.Group();
+    barrel.add(barrelBody);
+    barrel.add(topBand);
+    barrel.add(middleBand);
+    barrel.add(bottomBand);
+
+    barrel.position.set(-4, 7, -10); // Spawn position
+    barrel.scale.set(1, 1, 1);
+    barrel.rotation.y = Math.PI / 2;
+    barrel.rotation.z = Math.PI / 2;
+
+    cena.add(barrel); // Add barrel to the scene
+    barrels.push(barrel); // Add barrel to the array
+}
+
+setInterval(() => {
+    spawnBarrel();
+}, 5000); // Spawn a barrel every 2 seconds
 
 function Start() {
     cena.add(meshCubo);
@@ -264,7 +282,7 @@ function Start() {
     function loop() {
         handleMovement(); 
         applyGravity();
-        applyBarrelGravity(); 
+        applyBarrelPhysics(); 
         renderer.render(cena, cameraPerspetiva);
         requestAnimationFrame(loop);
     }
