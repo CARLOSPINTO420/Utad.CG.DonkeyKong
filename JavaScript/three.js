@@ -177,7 +177,6 @@ function applyBarrelPhysics() {
                 barrel.position.y += floorLevel - barrelBottomY; // Clamp to floor level
                 barrelVelocityY = 0; // Stop vertical movement
             }
-
             // Update the barrel's vertical position
             barrel.position.y += barrelVelocityY;
 
@@ -187,15 +186,15 @@ function applyBarrelPhysics() {
 
             // Apply rolling motion if the tilt exceeds 10 degrees
             if (Math.abs(tiltAngleX) > 10) {
-                const rollAccelerationZ = Math.sin(intersectedPlane.rotation.y) * 0.2; // Adjust rolling speed
-                barrel.position.x += rollAccelerationZ;
-                //barrel.rotation.x += rollAccelerationZ / 0.5; // Simulate rolling
+                const rollAccelerationZ = Math.sin(intersectedPlane.rotation.x) * 0.05; // Adjust rolling speed
+                barrel.position.x -= rollAccelerationZ;
+//                barrel.rotation.x += rollAccelerationZ / 0.5; // Simulate rolling
             }
 
             if (Math.abs(tiltAngleZ) > 10) {
                 const rollAccelerationX = Math.sin(intersectedPlane.rotation.z) * 0.05; // Adjust rolling speed
-                barrel.position.x += rollAccelerationX;
-//                //barrel.rotation.z += rollAccelerationX / 0.5; // Simulate rolling
+                barrel.position.x -= rollAccelerationX;
+//                barrel.rotation.x += rollAccelerationX / 0.5; // Simulate rolling
             }
         } else {
             // If no intersection, let the barrel fall indefinitely
@@ -203,60 +202,163 @@ function applyBarrelPhysics() {
             barrel.position.y += barrelVelocityY;
         }
 
+        // Check for collision with the cube
+        const barrelBoundingBox = new THREE.Box3().setFromObject(barrel);
+        const cubeBoundingBox = new THREE.Box3().setFromObject(meshCubo);
+
+        if (barrelBoundingBox.intersectsBox(cubeBoundingBox)) {
+            // Destroy the barrel on collision
+            breakBarrel(barrel);
+            barrels.splice(index, 1); // Remove barrel from the array
+        }
+
         // Destroy the barrel if it falls below the floor
         if (barrel.position.y < 0) {
-            cena.remove(barrel); // Remove barrel from the scene
+            breakBarrel(barrel); // Trigger the breaking effect
             barrels.splice(index, 1); // Remove barrel from the array
         }
     });
 }
 
+function breakBarrel(barrel) {
+    const fragments = []; // Array to store fragments
+
+    // Create fragments
+    for (let i = 0; i < 10; i++) {
+        const fragmentGeometry = new THREE.BoxGeometry(0.3, 0.3, 0.3); // Small cube fragments
+        const fragmentMaterial = new THREE.MeshStandardMaterial({ color: 0x856b4a });
+        const fragment = new THREE.Mesh(fragmentGeometry, fragmentMaterial);
+
+        // Set fragment position to the barrel's position
+        fragment.position.copy(barrel.position);
+
+        // Add random velocity and rotation
+        fragment.userData.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.3, // Random X velocity
+            Math.random() * 0.3,         // Random Y velocity
+            (Math.random() - 0.5) * 0.3  // Random Z velocity
+        );
+        fragment.userData.rotationSpeed = new THREE.Vector3(
+            Math.random() * 0.2, // Random X rotation speed
+            Math.random() * 0.2, // Random Y rotation speed
+            Math.random() * 0.2  // Random Z rotation speed
+        );
+
+        cena.add(fragment);
+        fragments.push(fragment);
+    }
+
+    // Remove the original barrel
+    cena.remove(barrel);
+
+    // Animate fragments
+    const fragmentLifetime = 2;
+    const movementTime = 0.75
+    const startTime = performance.now();
+
+    function animateFragments() {
+        const elapsedTime = (performance.now() - startTime) / 1000;
+
+        if (elapsedTime < fragmentLifetime) {
+            fragments.forEach((fragment) => {
+                // Apply gravity
+                fragment.userData.velocity.y -= gravity;
+                if((elapsedTime < movementTime)) {
+                    // Apply velocity
+                    fragment.position.add(fragment.userData.velocity);
+                    
+                    // Apply rotation
+                    fragment.rotation.x += fragment.userData.rotationSpeed.x;
+                    fragment.rotation.y += fragment.userData.rotationSpeed.y;
+                    fragment.rotation.z += fragment.userData.rotationSpeed.z
+                }
+                
+
+                const floorLevel = plane.position.y; // Assuming the floor is the main plane
+                if (fragment.position.y < floorLevel) {
+                    fragment.position.y = floorLevel; // Clamp to floor level
+                    fragment.userData.velocity.y = 0; // Stop vertical movement
+                }
+            });
+
+            requestAnimationFrame(animateFragments);
+        } else {
+            // Remove fragments from the scene
+            fragments.forEach((fragment) => cena.remove(fragment));
+        }
+    }
+
+    animateFragments();
+}
+
 const barrels = []; // Array to store all barrels
 
 function spawnBarrel() {
-    // Create a new barrel
-    const barrelBodyGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1.5, 32);
-    const barrelBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
-    const barrelBody = new THREE.Mesh(barrelBodyGeometry, barrelBodyMaterial);
-    barrelBody.castShadow = true;
-    barrelBody.receiveShadow = true;
+    const barrelWood = makeBarrel(0.7, 1, 2.5)
 
-    const bandGeometry = new THREE.TorusGeometry(0.5, 0.05, 16, 100);
+    let m = new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load("./Texturas/woodBarreltexture.jpg")})
+    m.lightMap = new THREE.TextureLoader().load("./Texturas/woodBarreltexture.jpg")
+    let barrel = new THREE.Mesh(barrelWood, m)
+    barrel.castShadow = true;  
+
+    const bandGeometry = new THREE.TorusGeometry(0.35, 0.05, 16, 100);
     const bandMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
+    const bandMiddleGeometry = new THREE.TorusGeometry(0.47, 0.05, 16, 100);
 
     const topBand = new THREE.Mesh(bandGeometry, bandMaterial);
     topBand.rotation.x = Math.PI / 2;
-    topBand.position.y = 0.7;
+    topBand.position.y = 0.57;
     topBand.castShadow = true;
+    barrel.add(topBand);
 
-    const middleBand = new THREE.Mesh(bandGeometry, bandMaterial);
-    middleBand.rotation.x = Math.PI / 2;
+    const middleBand = new THREE.Mesh(bandMiddleGeometry, bandMaterial);
+    middleBand.rotation.x = Math.PI/2;
     middleBand.position.y = 0;
     middleBand.castShadow = true;
+    barrel.add(middleBand);
 
     const bottomBand = new THREE.Mesh(bandGeometry, bandMaterial);
     bottomBand.rotation.x = Math.PI / 2;
-    bottomBand.position.y = -0.7;
+    bottomBand.position.y = -0.57;
     bottomBand.castShadow = true;
-
-    const barrel = new THREE.Group();
-    barrel.add(barrelBody);
-    barrel.add(topBand);
-    barrel.add(middleBand);
-    barrel.add(bottomBand);
-
+    barrel.add(bottomBand); 
+    // Position and add the barrel to the scene
     barrel.position.set(-4, 7, -10); // Spawn position
     barrel.scale.set(1, 1, 1);
     barrel.rotation.y = Math.PI / 2;
     barrel.rotation.z = Math.PI / 2;
-
+    
     cena.add(barrel); // Add barrel to the scene
-    barrels.push(barrel); // Add barrel to the array
+    barrels.push(barrel);
 }
 
-setInterval(() => {
-    spawnBarrel();
-}, 5000); // Spawn a barrel every 2 seconds
+setInterval(() => {spawnBarrel();}, 2000);
+
+function playBackgroundMusic() {
+    const audio = new Audio('Audio/BackGround.mp3'); // Path to your audio file
+    audio.loop = true; // Loop the music
+    audio.volume = 0.5; // Set volume (0.0 to 1.0)
+    audio.play();
+}
+
+function makeBarrel(radius, Radius, heigth){
+	let barrel = new THREE.CylinderGeometry(1, 1, 2, 24, 32);
+	let v3 = new THREE.Vector3();
+  let v2 = new THREE.Vector2();
+  let pos = barrel.attributes.position;
+  let rDiff = Radius - radius;
+  for(let i = 0; i < pos.count; i++){
+  	v3.fromBufferAttribute(pos, i);
+    let y = Math.abs(v3.y);
+    let rShift = Math.pow(Math.sqrt(1 - (y * y)), 2) * rDiff + radius;
+    v2.set(v3.x, v3.z).setLength(rShift);
+    v3.set(v2.x, v3.y, v2.y);
+    pos.setXYZ(i, v3.x, v3.y, v3.z);
+  }
+  barrel.scale(0.5, heigth * 0.25, 0.5);
+  barrel.castShadow = true;
+  return barrel;
+}
 
 function Start() {
     cena.add(meshCubo);
@@ -279,6 +381,7 @@ function Start() {
     luzDirecional.shadow.mapSize.height = 2048
     cena.add(luzDirecional);
     cena.add(plane);
+    playBackgroundMusic();
     function loop() {
         handleMovement(); 
         applyGravity();
