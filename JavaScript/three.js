@@ -87,7 +87,7 @@ let jumpBuffered = false;
 
 let jumpBufferTimer = 0;
 
-const jumpBufferTime = 0.2; // Tempo máximo para encadear salto (em segundos)
+const jumpBufferTime = 0.4; // Tempo máximo para encadear salto (em segundos)
 let lastGroundTime = 0;     // Quando tocou no chão pela última vez
 
 //--------------------------------
@@ -142,13 +142,13 @@ document.addEventListener('keydown', (event) => {
         isJumping = true;
 
         if (isJumping) {
-            objetoMario.position.x += currentSpeedX + (objetoMario.velocityX || 0);
+            objetoMario.velocityX = currentSpeedX;
         }
 
         if (jumpCount === 1) velocityY = settings.baseJumpSpeed;
-        else if (jumpCount === 2) velocityY = settings.baseJumpSpeed * 1.3;
+        else if (jumpCount === 2) velocityY = settings.baseJumpSpeed * 1.2;
         else if (jumpCount === 3) {
-            velocityY = settings.baseJumpSpeed * 1.8;
+            velocityY = settings.baseJumpSpeed * 1.5;
             objetoMario.velocityX *= 1.5;
             jumpCount = 0;
         }
@@ -171,11 +171,11 @@ document.addEventListener('keyup', (event) => {
 
 
 function tweakVariables() {
-    settings.jumpSpeed = 0.5;
-    settings.gravity = 0.035;
-    settings.acceleration = 0.25;
-    settings.maxSpeed = 0.7;
-    settings.smoothingFactor = 0.35;
+    settings.jumpSpeed = 0.3;
+    settings.gravity = 0.07;
+    settings.acceleration = 0.2;
+    settings.maxSpeed = 0.5;
+    settings.smoothingFactor = isJumping ? 0.1 : 0.35; // Mais suave quando a saltar
 }
 
 
@@ -203,22 +203,28 @@ function handleMovement() {
 
     if (!objetoMario) return;
 
-    const targetMaxSpeed = isSprinting ? baseMoveSpeed * sprintMultiplier : baseMoveSpeed;
+    const grounded = !isJumping;
+    const maxSpeed = isSprinting ? 0.18 : 0.09;
+    const airControlFactor = grounded ? 1 : 0.4; // Menos controlo no ar
+
     let targetSpeed = 0;
 
-    if (keysPressed['a']) targetSpeed = -targetMaxSpeed;
-    else if (keysPressed['d']) targetSpeed = targetMaxSpeed;
+    if (keysPressed['a']) {
+        targetSpeed = -maxSpeed;
+    } else if (keysPressed['d']) {
+        targetSpeed = maxSpeed;
+    }
 
-    // Ajuste rápido para movimento responsivo (estilo Celeste)
-    currentSpeedX += (targetSpeed - currentSpeedX) * accelerationRate;
-
+    // Aplica aceleração suavizada, ajustada para ar/solo
+    currentSpeedX += (targetSpeed - currentSpeedX) * (0.2 * airControlFactor);
+    
     objetoMario.position.x += currentSpeedX;
 
-    if (currentSpeedX < 0) objetoMario.rotation.y += (0 - objetoMario.rotation.y) * 0.5;
-    else if (currentSpeedX > 0) objetoMario.rotation.y += (Math.PI - objetoMario.rotation.y) * 0.5;
-
-    if (isJumping) {
-        objetoMario.position.x += objetoMario.velocityX || 0;
+    // Roda o Mario consoante a direção
+    if (currentSpeedX < 0) {
+        objetoMario.rotation.y += (0 - objetoMario.rotation.y) * 0.5;
+    } else if (currentSpeedX > 0) {
+        objetoMario.rotation.y += (Math.PI - objetoMario.rotation.y) * 0.5;
     }
 }
 
@@ -234,6 +240,7 @@ function applyGravity() {
         isJumping = true;
     } else {
         if (isJumping) {
+            objetoMario.position.x += objetoMario.velocityX || 0;
             cayoteTimer = settings.cayoteTime;
             lastGroundTime = relogio.getElapsedTime();
         }
@@ -451,29 +458,39 @@ function loop() {
 
     
     if (objetoMario) {
-        const cameraHeight = 2.5; // Altura fixa da câmara
+        const cameraHeightOffset = 2; // Distância vertical entre a câmara e o Mario
         const cameraDistance = 10; // Distância atrás do personagem
     
-        
         const marioPos = objetoMario.position.clone();
-
-        // Alvo da câmera: mesma posição em X e Z, altura fixa em Y
+    
+        // A câmara agora segue verticalmente a posição do Mario, mas com um offset
         const targetPosition = new THREE.Vector3(
-            marioPos.x,
-            cameraHeight,
-            marioPos.z + cameraDistance
+            marioPos.x, // A câmara segue a posição X do Mario
+            marioPos.y + cameraHeightOffset, // Ajusta a altura da câmara conforme o Mario sobe/desce
+            marioPos.z + cameraDistance // Distância fixa no eixo Z
         );
     
         // Suavemente move a câmara para a posição alvo com um fator de suavização
-       
         cameraPerspetiva.position.lerp(targetPosition, settings.smoothingFactor);
     
+        // Garante que a câmara olha para o Mario
+        const lookAtPos = marioPos.clone();
+        lookAtPos.y += 1; // Olha para o "tronco" do Mario
+        cameraPerspetiva.lookAt(lookAtPos);
     
-            // Garante que a câmera olha para o Mario, mas com altura constante
-            const lookAtPos = marioPos.clone();
-            lookAtPos.y += 1; // Olhar sempre para o "tronco" do Mario
-            cameraPerspetiva.lookAt(lookAtPos);
-       
+        // Aumentar o FOV quando o Mario estiver a correr
+        const sprintFOV = 75; // FOV quando o Mario está a correr
+        const walkFOV = 60; // FOV quando o Mario está andando
+    
+        // Se estiver a correr, aumenta o FOV
+        if (isSprinting) {
+            cameraPerspetiva.fov = THREE.MathUtils.lerp(cameraPerspetiva.fov, sprintFOV, 0.1);
+        } else {
+            cameraPerspetiva.fov = THREE.MathUtils.lerp(cameraPerspetiva.fov, walkFOV, 0.1);
+        }
+    
+        // Atualiza a câmara para aplicar a alteração do FOV
+        cameraPerspetiva.updateProjectionMatrix();
     }
     renderer.render(cena, cameraPerspetiva);
     requestAnimationFrame(loop);
