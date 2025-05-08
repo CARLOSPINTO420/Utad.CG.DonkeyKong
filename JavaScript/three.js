@@ -21,7 +21,7 @@ var importer = new FBXLoader();
 
 // Variaveis para sprinting e salto
 
-const baseJumpSpeed = 0.5;  // Velocidade de salto normal
+const baseJumpSpeed = 0.9;  // Velocidade de salto normal
 const sprintJumpSpeed = 0.4; // Velocidade de salto quando a correr
 
 const sprintJumpXSpeed = 0.3; // Impulso horizontal extra quando o mario está a correr
@@ -61,11 +61,31 @@ var planeEdgeMaterial = new THREE.LineBasicMaterial({ color: 0xffffff,linewidth:
 var planeEdgeLines = new THREE.LineSegments(planeEdges, planeEdgeMaterial);
 plane.add(planeEdgeLines);
 
+
+// Variaveis de movimento e salto
+
+const sprintThreshold = 0.2; // segundos
+
 const moveSpeed = 0.09;
 const jumpSpeed = 0.5;
 const gravity = 0.035;
 let velocityY = 0;
 let isJumping = false;
+let jumpCount = 0;
+let jumpStartTime = 0;
+
+let cayoteTimer = 0;
+const cayoteTime = 0.15;
+let jumpBuffered = false;
+
+let jumpBufferTimer = 0;
+
+const jumpBufferTime = 0.2; // Tempo máximo para encadear salto (em segundos)
+let lastGroundTime = 0;     // Quando tocou no chão pela última vez
+
+//--------------------------------
+
+
 
 const planeSize = 70;
 const halfPlaneSize = planeSize / 2;
@@ -73,27 +93,62 @@ const cubeSize = 2;
 
 const keysPressed = {};
 
+
+const accelerationRate = 0.004;
+const maxSpeed = 0.18;
+const walkSpeed = 0.09;
+
+let currentMaxSpeed = walkSpeed;
+
+function updateSprintState(delta) {
+    const moving = keysPressed['a'] || keysPressed['d'];
+    if (moving) {
+        runTimer += delta;
+        if (runTimer >= sprintThreshold) isSprinting = true;
+    } else {
+        runTimer = 0;
+        isSprinting = false;
+    }
+}
+
+let runTimer = 0;
+
 document.addEventListener('keydown', (event) => {
     keysPressed[event.key] = true; 
     if (event.key === 'Shift') {
         isSprinting = true;
     }
    
-    if (event.key === ' ' && !isJumping) {
-        // Se o jogador estiver a correr, adicionar impulso no eixo X
-        const jumpToApply = isSprinting ? sprintJumpSpeed : baseJumpSpeed;
-        velocityY = jumpToApply;
+   
+    if (event.key === ' ') {
+        jumpBuffered = true;
+        jumpBufferTimer = jumpBufferTime;
+
+        const now = relogio.getElapsedTime();
+        const grounded = !isJumping;
+
+        if (grounded) {
+            jumpCount = (now - lastGroundTime <= jumpBufferTime) ? jumpCount + 1 : 1;
+        } else return;
+
         isJumping = true;
 
-        // Impulso adicional no eixo X quando saltar enquanto corre
+        if (isJumping) {
+            objetoMario.position.x += currentSpeedX + (objetoMario.velocityX || 0);
+        }
+
+        if (jumpCount === 1) velocityY = baseJumpSpeed;
+        else if (jumpCount === 2) velocityY = baseJumpSpeed * 1.3;
+        else if (jumpCount === 3) {
+            velocityY = baseJumpSpeed * 1.8;
+            objetoMario.velocityX *= 1.5;
+            jumpCount = 0;
+        }
+
+        objetoMario.velocityX = 0;
         if (isSprinting) {
-            if (keysPressed['a']) {
-                // Se estiver a mover-se para a esquerda, dar um impulso negativo no X
-                objetoMario.velocityX = -sprintJumpXSpeed;
-            } else if (keysPressed['d']) {
-                // Se estiver a mover-se para a direita, dar um impulso positivo no X
-                objetoMario.velocityX = sprintJumpXSpeed;
-            }
+            if (keysPressed['a']) objetoMario.velocityX = -sprintJumpXSpeed;
+            else if (keysPressed['d']) objetoMario.velocityX = sprintJumpXSpeed;
         }
     }
 });
@@ -105,17 +160,52 @@ document.addEventListener('keyup', (event) => {
     }
 });
 
-function handleMovement() {
-    const currentSpeed = isSprinting ? baseMoveSpeed * sprintMultiplier : baseMoveSpeed; //calcula a velocidade de movimento
 
-    if (keysPressed['a'] && objetoMario.position.x - currentSpeed > -halfPlaneSize + cubeSize / 2) {
-        objetoMario.position.x -= currentSpeed;
-        objetoMario.rotation.y += (0 - objetoMario.rotation.y) * 0.5;
-    }
-    if (keysPressed['d'] && objetoMario.position.x + currentSpeed < halfPlaneSize - cubeSize / 2) {
-        objetoMario.position.x += currentSpeed;
-        objetoMario.rotation.y += (Math.PI - objetoMario.rotation.y) * 0.5;
-    }
+function tweakVariables() {
+    jumpSpeed = 0.9;
+    gravity = 0.05;
+    acceleration = 0.25;
+    maxSpeed = 0.18;
+    smoothingFactor = 0.35;
+}
+
+let currentSpeedX = 0;
+const acceleration = 0.25;
+
+
+function handleMovement() {
+    // const currentSpeed = isSprinting ? baseMoveSpeed * sprintMultiplier : baseMoveSpeed; //calcula a velocidade de movimento
+
+    // if (keysPressed['a'] && objetoMario.position.x - currentSpeed > -halfPlaneSize + cubeSize / 2) {
+    //     objetoMario.position.x -= currentSpeed;
+    //     objetoMario.rotation.y += (0 - objetoMario.rotation.y) * 0.5;
+    // }
+    // if (keysPressed['d'] && objetoMario.position.x + currentSpeed < halfPlaneSize - cubeSize / 2) {
+    //     objetoMario.position.x += currentSpeed;
+    //     objetoMario.rotation.y += (Math.PI - objetoMario.rotation.y) * 0.5;
+    // }
+    // if (!keysPressed['a'] && !keysPressed['d']) {
+    //     objetoMario.rotation.y += (0 - objetoMario.rotation.y) * 0.1; // suavemente volta à frente
+    // }
+    // if (isJumping) {
+    //     objetoMario.position.x += objetoMario.velocityX || 0;
+    // }
+
+
+    if (!objetoMario) return;
+
+    const maxSpeed = isSprinting ? baseMoveSpeed * sprintMultiplier : baseMoveSpeed;
+    let targetSpeed = 0;
+
+    if (keysPressed['a']) targetSpeed = -maxSpeed;
+    else if (keysPressed['d']) targetSpeed = maxSpeed;
+
+    currentSpeedX += (targetSpeed - currentSpeedX) * 0.35;
+    objetoMario.position.x += currentSpeedX;
+
+    if (currentSpeedX < 0) objetoMario.rotation.y += (0 - objetoMario.rotation.y) * 0.5;
+    else if (currentSpeedX > 0) objetoMario.rotation.y += (Math.PI - objetoMario.rotation.y) * 0.5;
+
     if (isJumping) {
         objetoMario.position.x += objetoMario.velocityX || 0;
     }
@@ -124,14 +214,23 @@ function handleMovement() {
 function applyGravity() {
     if(!objetoMario) return;
     const floorLevel = plane.position.y + cubeSize / 2;
+
+    if ((cayoteTimer > 0 || !isJumping) && jumpBuffered) jumpBuffered = false;
+
     if (objetoMario.position.y > floorLevel || velocityY > 0) {
-        velocityY -= gravity;
+        objetoMario.position.y += velocityY;
+        velocityY -= settings.gravity;
+        isJumping = true;
     } else {
+        if (isJumping) {
+            cayoteTimer = settings.cayoteTime;
+            lastGroundTime = relogio.getElapsedTime();
+        }
         objetoMario.position.y = floorLevel;
         velocityY = 0;
+        objectoMario.velocityX = 0;
         isJumping = false;
     }
-    objetoMario.position.y += velocityY;
    
 }
 
@@ -241,6 +340,9 @@ function Start() {
     cena.add(plane);
 
     renderer.render(cena, cameraPerspetiva);
+
+
+    tweakVariables(); // Ajusta as variáveis de movimento e salto para better testing
     
 
     // Importacao de Modelos FBX
@@ -297,6 +399,8 @@ function Start() {
         object.position.x = 0;
         object.position.y = 0;
         object.position.z = -10;
+
+        object.velocityX = 0;
         cena.add(object);
         objetoMario = object;
     
@@ -314,8 +418,16 @@ function loop() {
     if (mixerAnimacao) {
         mixerAnimacao.update(delta); // Update the animation mixer
     }
+
+
+    jumpBufferTimer -= delta;
+    if (jumpBufferTimer <= 0) jumpBuffered = false;
+    
+    updateSprintState(delta); // Atualiza o estado de sprinting
     handleMovement();
     
+
+    cayoteTimer -= delta;
     applyGravity();
 
     //emitDustParticles();
@@ -337,7 +449,7 @@ function loop() {
         );
     
         // Suavemente move a câmara para a posição alvo com um fator de suavização
-        const smoothingFactor = isJumping ? 0.05 : 0.1; // Suavização maior enquanto o Mario está saltando
+        const smoothingFactor = 0.35; // Suavização maior enquanto o Mario está saltando
         cameraPerspetiva.position.lerp(targetPosition, smoothingFactor);
     
     
