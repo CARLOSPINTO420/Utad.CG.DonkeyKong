@@ -2,18 +2,13 @@ import * as THREE from 'three';
 import {FBXLoader} from 'FBXLoader';
 document.addEventListener('DOMContentLoaded', Start);
 
-// Para Models Importados
-var objetoImportado;
 var mixerAnimacao;
-var relogio = new THREE.Clock();
 var importer = new FBXLoader();
 
-// Setup da cena, e o render
 var cena = new THREE.Scene();
 var renderer = new THREE.WebGLRenderer();
-renderer.shadowMap.enabled = true; // Ativar sombras
+renderer.shadowMap.enabled = true;
 
-//Setup camera
 var cameraPerspetiva = new THREE.PerspectiveCamera(60,16/9,0.1,100); 
 cameraPerspetiva.position.set(0, 3, 3);
 
@@ -22,7 +17,7 @@ renderer.setClearColor(0x202020);
 
 document.body.appendChild(renderer.domElement);
 
-// Adiciona cubo ao cenário
+
 var gerometriaCubo = new THREE.BoxGeometry(1,2,1);
 var materialTextura = new THREE.MeshStandardMaterial({color: 0x000000});
 var meshCubo = new THREE.Mesh(gerometriaCubo,materialTextura);
@@ -30,13 +25,11 @@ meshCubo.castShadow = true;
 meshCubo.translateZ(-10);
 meshCubo.translateX(-10);
 
-// Adiciona bordas ao cubo
 var edges = new THREE.EdgesGeometry(gerometriaCubo);
 var edgeMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
 var edgeLines = new THREE.LineSegments(edges, edgeMaterial);
 meshCubo.add(edgeLines);
 
-// Adiciona o chao 
 var planeGeometry = new THREE.PlaneGeometry(30, 50);
 var planeMaterial = new THREE.MeshStandardMaterial({ color: 0x202020 });
 var plane = new THREE.Mesh(planeGeometry, planeMaterial);
@@ -44,31 +37,28 @@ plane.rotation.x = - Math.PI / 2;
 plane.position.y = -1; 
 plane.receiveShadow = true;
 
-var tiltedPlaneGeometry = new THREE.PlaneGeometry(10, 5); // Smaller plane
+var tiltedPlaneGeometry = new THREE.BoxGeometry(10, 2,0.5);
 var tiltedPlaneMaterial = new THREE.MeshStandardMaterial({ color: 0x404040 });
 tiltedPlaneMaterial.side = THREE.DoubleSide;
 tiltedPlaneMaterial.shadowSide = THREE.BackSide;
 var tiltedPlane = new THREE.Mesh(tiltedPlaneGeometry, tiltedPlaneMaterial);
 tiltedPlane.rotation.x = -Math.PI / 2;
-tiltedPlane.rotation.y = Math.PI / 12;
-tiltedPlane.position.set(0, 1, -10);
+tiltedPlane.rotation.y = Math.PI / 36;
+tiltedPlane.position.set(0, 3, -10);
 tiltedPlane.receiveShadow = true;
 tiltedPlane.castShadow = true;
 cena.add(tiltedPlane);
 
-//Adiciona bordas ao chao
 var planeEdges = new THREE.EdgesGeometry(planeGeometry);
 var planeEdgeMaterial = new THREE.LineBasicMaterial({ color: 0xffffff,linewidth: 10 });
 var planeEdgeLines = new THREE.LineSegments(planeEdges, planeEdgeMaterial);
 plane.add(planeEdgeLines);
 
-//Funcao que trata de importar modelos e animaçoes
 importer.load('Objetos/marioModel.fbx', function (object) {
     mixerAnimacao = new THREE.AnimationMixer(object);
-    //object animations tem todas as que estao no objeto
     var action = mixerAnimacao.clipAction(object.animations[0]);
     action.play();
-    // Material para o modelo
+
     object.traverse(function (child) {
         if (child.isMesh) {
             child.castShadow = true;
@@ -89,59 +79,107 @@ importer.load('Objetos/marioModel.fbx', function (object) {
     objetoImportado = object;
 });
 
-// Variaveis de gravidade e movimento
 const moveSpeed = 0.08;
 const jumpSpeed = 0.5;
 const gravity = 0.02;
 let velocityY = 0;
 let isJumping = false;
-const planes = [plane, tiltedPlane]; // Add all planes here
+const planes = [plane, tiltedPlane];
 
-// Tamanho do plano e do cubo
 const planeSize = 15;
 const halfPlaneSize = planeSize / 2;
 const cubeSize = 2;
 
 const keysPressed = {};
+let isWalking = false;
 
-// Determinar se o objeto pode saltar 
 document.addEventListener('keydown', (event) => {
     keysPressed[event.key] = true; 
     if (event.key === 'w' && !isJumping) {
         velocityY = jumpSpeed;
         isJumping = true;
+        const jumpAudio = new Audio('Audio/jump.wav');
+        jumpAudio.volume = 0.5;
+        jumpAudio.play();
     }
+    if(event.key === 'a' && keysPressed[event.key] === true && !isWalking) {
+        //const walkAudio = new Audio('Audio/walking.wav');
+        // walkAudio.volume = 0.2;
+        // walkAudio.play();
+        
+        // isWalking = true;
+    }
+    if(event.key === 'd' && keysPressed[event.key] === true && !isWalking) {
+        // const walkAudio = new Audio('Audio/walking.wav');
+        // walkAudio.volume = 0.2;
+        // walkAudio.play();
+        // isWalking = true;
+    }
+    
 });
 
-// Verificar se alguma tecla foi solta
 document.addEventListener('keyup', (event) => {
     keysPressed[event.key] = false;
+    isWalking = false;
+
 });
 
-//funcao responsavel pelo movimento lateral
 function handleMovement() {
-    if (keysPressed['a'] && meshCubo.position.x - moveSpeed > -halfPlaneSize + cubeSize / 2) {  
-        meshCubo.position.x -= moveSpeed;
-    }
-    if (keysPressed['d'] && meshCubo.position.x + moveSpeed < halfPlaneSize - cubeSize / 2) {
-        meshCubo.position.x += moveSpeed;
+    const raycaster = new THREE.Raycaster();
+    const downDirection = new THREE.Vector3(0, -1, 0);
+
+    raycaster.set(meshCubo.position, downDirection);
+
+    const intersects = raycaster.intersectObjects(planes, true);
+
+    if (intersects.length > 0) {
+        if (keysPressed['a']) {
+            meshCubo.position.x -= moveSpeed;
+            
+        }
+        if (keysPressed['d']) {
+            meshCubo.position.x += moveSpeed;
+        }
     }
 }
 
-//Funcao responsavel pela gravidade movimento vertical e colisao com o chao
 function applyGravity() {
-    
-    const floorLevel = plane.position.y + cubeSize / 2;
-    if (meshCubo.position.y > floorLevel || velocityY > 0) {
-        velocityY -= gravity; 
-    } else {
-        meshCubo.position.y = floorLevel;
-        velocityY = 0; 
+    const raycasterDown = new THREE.Raycaster();
+    const raycasterUp = new THREE.Raycaster();
+    const downDirection = new THREE.Vector3(0, -1, 0);
+    const upDirection = new THREE.Vector3(0, 1, 0);    
 
-            
-        isJumping = false;
+    raycasterDown.set(meshCubo.position, downDirection);
+    raycasterUp.set(meshCubo.position, upDirection);
+
+    const intersectsDown = raycasterDown.intersectObjects(planes, true);
+
+    const intersectsUp = raycasterUp.intersectObjects(planes, true);
+
+    if (intersectsDown.length > 0) {
+        const intersection = intersectsDown[0];
+        const floorLevel = intersection.point.y + cubeSize / 2;
+
+        if (meshCubo.position.y > floorLevel || velocityY > 0) {
+            velocityY -= gravity;
+        } else {
+            meshCubo.position.y = floorLevel;
+            velocityY = 0;
+            isJumping = false;
+        }
+    } else {
+        velocityY -= gravity;
     }
 
+    if (intersectsUp.length > 0) {
+        const intersection = intersectsUp[0];
+        const ceilingLevel = intersection.point.y - cubeSize / 2;
+
+        if (meshCubo.position.y + velocityY > ceilingLevel) {
+            meshCubo.position.y = ceilingLevel; 
+            velocityY = Math.min(velocityY, 0);
+        }
+    }
     meshCubo.position.y += velocityY;
 }
 
@@ -150,108 +188,95 @@ const barrelGravity = 0.02;
 
 function applyBarrelPhysics() {
     barrels.forEach((barrel, index) => {
-        // Create a raycaster
         const raycaster = new THREE.Raycaster();
-        const downDirection = new THREE.Vector3(0, -1, 0); // Ray points downward
+        const downDirection = new THREE.Vector3(0, -1, 0);
 
-        // Set the raycaster's origin and direction
         raycaster.set(barrel.position, downDirection);
 
-        // Check for intersections with planes
-        const intersects = raycaster.intersectObjects(planes, true); // 'planes' is an array of all planes
+        const intersects = raycaster.intersectObjects(planes, true);
 
         if (intersects.length > 0) {
-            // Get the closest intersected object
             const intersection = intersects[0];
-            const floorLevel = intersection.point.y; // Y-coordinate of the intersection point
+            const floorLevel = intersection.point.y;
             const intersectedPlane = intersection.object;
 
-            // Calculate the barrel's bottom position
             const barrelBoundingBox = new THREE.Box3().setFromObject(barrel);
             const barrelBottomY = barrelBoundingBox.min.y;
 
-            // Apply gravity
+            const distanceToPlane = Math.abs(barrelBottomY - floorLevel);
+            if (distanceToPlane < 0.01) {
+                const tiltAngleX = THREE.MathUtils.radToDeg(intersectedPlane.rotation.x);
+                const tiltAngleZ = THREE.MathUtils.radToDeg(intersectedPlane.rotation.z);
+
+                if (Math.abs(tiltAngleX) > 10) {
+                    const rollAccelerationZ = Math.sin(intersectedPlane.rotation.x) * 0.1;
+                    barrel.position.x -= rollAccelerationZ;
+                }
+
+                if (Math.abs(tiltAngleZ) > 10) {
+                    const rollAccelerationX = Math.sin(intersectedPlane.rotation.z) * 0.1;
+                    barrel.position.x -= rollAccelerationX;
+                }
+            }
+
             if (barrelBottomY > floorLevel || barrelVelocityY > 0) {
-                barrelVelocityY -= barrelGravity; // Apply gravity
+                barrelVelocityY -= barrelGravity;
             } else {
-                barrel.position.y += floorLevel - barrelBottomY; // Clamp to floor level
-                barrelVelocityY = 0; // Stop vertical movement
+                barrel.position.y += floorLevel - barrelBottomY;
+                barrelVelocityY = 0;
             }
-            // Update the barrel's vertical position
             barrel.position.y += barrelVelocityY;
-
-            // Check the tilt of the intersected plane
-            const tiltAngleX = THREE.MathUtils.radToDeg(intersectedPlane.rotation.x);
-            const tiltAngleZ = THREE.MathUtils.radToDeg(intersectedPlane.rotation.z);
-
-            // Apply rolling motion if the tilt exceeds 10 degrees
-            if (Math.abs(tiltAngleX) > 10) {
-                const rollAccelerationZ = Math.sin(intersectedPlane.rotation.x) * 0.05; // Adjust rolling speed
-                barrel.position.x -= rollAccelerationZ;
-//                barrel.rotation.x += rollAccelerationZ / 0.5; // Simulate rolling
-            }
-
-            if (Math.abs(tiltAngleZ) > 10) {
-                const rollAccelerationX = Math.sin(intersectedPlane.rotation.z) * 0.05; // Adjust rolling speed
-                barrel.position.x -= rollAccelerationX;
-//                barrel.rotation.x += rollAccelerationX / 0.5; // Simulate rolling
-            }
         } else {
-            // If no intersection, let the barrel fall indefinitely
             barrelVelocityY -= barrelGravity;
             barrel.position.y += barrelVelocityY;
         }
 
-        // Check for collision with the cube
         const barrelBoundingBox = new THREE.Box3().setFromObject(barrel);
         const cubeBoundingBox = new THREE.Box3().setFromObject(meshCubo);
 
         if (barrelBoundingBox.intersectsBox(cubeBoundingBox)) {
-            // Destroy the barrel on collision
             breakBarrel(barrel);
-            barrels.splice(index, 1); // Remove barrel from the array
+            barrels.splice(index, 1);
         }
 
-        // Destroy the barrel if it falls below the floor
         if (barrel.position.y < 0) {
-            breakBarrel(barrel); // Trigger the breaking effect
-            barrels.splice(index, 1); // Remove barrel from the array
+            breakBarrel(barrel);
+            barrels.splice(index, 1);
         }
     });
 }
 
 function breakBarrel(barrel) {
-    const fragments = []; // Array to store fragments
+    const fragments = [];
 
-    // Create fragments
+    const audio = new Audio('Audio/barrel.mp3');
+    audio.volume = 0.2;
+    audio.play();
+
     for (let i = 0; i < 10; i++) {
-        const fragmentGeometry = new THREE.BoxGeometry(0.3, 0.3, 0.3); // Small cube fragments
+        const fragmentGeometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
         const fragmentMaterial = new THREE.MeshStandardMaterial({ color: 0x856b4a });
         const fragment = new THREE.Mesh(fragmentGeometry, fragmentMaterial);
 
-        // Set fragment position to the barrel's position
         fragment.position.copy(barrel.position);
 
-        // Add random velocity and rotation
         fragment.userData.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 0.3, // Random X velocity
-            Math.random() * 0.3,         // Random Y velocity
-            (Math.random() - 0.5) * 0.3  // Random Z velocity
+            (Math.random() - 0.5) * 0.3,
+            Math.random() * 0.3,
+            (Math.random() - 0.5) * 0.3
         );
         fragment.userData.rotationSpeed = new THREE.Vector3(
-            Math.random() * 0.2, // Random X rotation speed
-            Math.random() * 0.2, // Random Y rotation speed
-            Math.random() * 0.2  // Random Z rotation speed
+            Math.random() * 0.2,
+            Math.random() * 0.2, 
+            Math.random() * 0.2  
         );
 
         cena.add(fragment);
         fragments.push(fragment);
     }
 
-    // Remove the original barrel
     cena.remove(barrel);
 
-    // Animate fragments
     const fragmentLifetime = 2;
     const movementTime = 0.75
     const startTime = performance.now();
@@ -261,29 +286,25 @@ function breakBarrel(barrel) {
 
         if (elapsedTime < fragmentLifetime) {
             fragments.forEach((fragment) => {
-                // Apply gravity
                 fragment.userData.velocity.y -= gravity;
                 if((elapsedTime < movementTime)) {
-                    // Apply velocity
+                    
                     fragment.position.add(fragment.userData.velocity);
                     
-                    // Apply rotation
                     fragment.rotation.x += fragment.userData.rotationSpeed.x;
                     fragment.rotation.y += fragment.userData.rotationSpeed.y;
                     fragment.rotation.z += fragment.userData.rotationSpeed.z
                 }
                 
-
-                const floorLevel = plane.position.y; // Assuming the floor is the main plane
+                const floorLevel = plane.position.y;
                 if (fragment.position.y < floorLevel) {
-                    fragment.position.y = floorLevel; // Clamp to floor level
-                    fragment.userData.velocity.y = 0; // Stop vertical movement
+                    fragment.position.y = floorLevel;
+                    fragment.userData.velocity.y = 0;
                 }
             });
 
             requestAnimationFrame(animateFragments);
         } else {
-            // Remove fragments from the scene
             fragments.forEach((fragment) => cena.remove(fragment));
         }
     }
@@ -291,7 +312,7 @@ function breakBarrel(barrel) {
     animateFragments();
 }
 
-const barrels = []; // Array to store all barrels
+const barrels = [];
 
 function spawnBarrel() {
     const barrelWood = makeBarrel(0.7, 1, 2.5)
@@ -322,52 +343,51 @@ function spawnBarrel() {
     bottomBand.position.y = -0.57;
     bottomBand.castShadow = true;
     barrel.add(bottomBand); 
-    // Position and add the barrel to the scene
-    barrel.position.set(-4, 7, -10); // Spawn position
+
+    barrel.position.set(-4, 10, -10);
     barrel.scale.set(1, 1, 1);
     barrel.rotation.y = Math.PI / 2;
     barrel.rotation.z = Math.PI / 2;
     
-    cena.add(barrel); // Add barrel to the scene
+    cena.add(barrel);
     barrels.push(barrel);
 }
 
-setInterval(() => {spawnBarrel();}, 2000);
+setInterval(() => {
+    spawnBarrel();
+    }, 2000);
 
 function playBackgroundMusic() {
-    const audio = new Audio('Audio/BackGround.mp3'); // Path to your audio file
-    audio.loop = true; // Loop the music
-    audio.volume = 0.5; // Set volume (0.0 to 1.0)
+    const audio = new Audio('Audio/bacmusic.wav');
+    audio.loop = true;
+    audio.volume = 0.5;
     audio.play();
 }
 
 function makeBarrel(radius, Radius, heigth){
-	let barrel = new THREE.CylinderGeometry(1, 1, 2, 24, 32);
-	let v3 = new THREE.Vector3();
-  let v2 = new THREE.Vector2();
-  let pos = barrel.attributes.position;
-  let rDiff = Radius - radius;
-  for(let i = 0; i < pos.count; i++){
-  	v3.fromBufferAttribute(pos, i);
-    let y = Math.abs(v3.y);
-    let rShift = Math.pow(Math.sqrt(1 - (y * y)), 2) * rDiff + radius;
-    v2.set(v3.x, v3.z).setLength(rShift);
-    v3.set(v2.x, v3.y, v2.y);
-    pos.setXYZ(i, v3.x, v3.y, v3.z);
-  }
-  barrel.scale(0.5, heigth * 0.25, 0.5);
-  barrel.castShadow = true;
-  return barrel;
+    let barrel = new THREE.CylinderGeometry(1, 1, 2, 24, 32);
+    let v3 = new THREE.Vector3();
+    let v2 = new THREE.Vector2();
+    let pos = barrel.attributes.position;
+    let rDiff = Radius - radius;
+    for(let i = 0; i < pos.count; i++){
+        v3.fromBufferAttribute(pos, i);
+        let y = Math.abs(v3.y);
+        let rShift = Math.pow(Math.sqrt(1 - (y * y)), 2) * rDiff + radius;
+        v2.set(v3.x, v3.z).setLength(rShift);
+        v3.set(v2.x, v3.y, v2.y);
+        pos.setXYZ(i, v3.x, v3.y, v3.z);}
+    barrel.scale(0.5, heigth * 0.25, 0.5);
+    barrel.castShadow = true;
+    return barrel;
 }
 
 function Start() {
     cena.add(meshCubo);
-    
-    //luz ambiente
+
     var luzAmbiente = new THREE.AmbientLight(0x404040, 5);
     cena.add(luzAmbiente);
 
-    // Luz direcional
     var luzDirecional = new THREE.DirectionalLight(0xffffff, 5);
     luzDirecional.position.set(5, 10,5);
     luzDirecional.castShadow = true;
