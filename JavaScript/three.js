@@ -57,10 +57,8 @@ let settings = {
 
 
 };
-const sprintThreshold = 0.2; // segundos
+const sprintThreshold = 0.4; // segundos
 
-const moveSpeed = 0.09;
-const jumpSpeed = 0.5;
 
 let isSprinting = false;
 
@@ -121,7 +119,7 @@ function updateSprintState(delta) {
 let runTimer = 0;
 
 document.addEventListener('keydown', (event) => {
-    console.log("⬇️ Tecla premida:", event.key);
+    //console.log("⬇️ Tecla premida:", event.key);
     keysPressed[event.key] = true; 
     if (event.key === 'Shift') {
         isSprinting = true;
@@ -146,9 +144,9 @@ document.addEventListener('keydown', (event) => {
         }
 
         if (jumpCount === 1) velocityY = settings.baseJumpSpeed;
-        else if (jumpCount === 2) velocityY = settings.baseJumpSpeed * 1.2;
+        else if (jumpCount === 2) velocityY = settings.baseJumpSpeed * 1.3;
         else if (jumpCount === 3) {
-            velocityY = settings.baseJumpSpeed * 1.5;
+            velocityY = settings.baseJumpSpeed * 1.65;
             objetoMario.velocityX *= 1.5;
             jumpCount = 0;
         }
@@ -162,7 +160,7 @@ document.addEventListener('keydown', (event) => {
 });
 
 document.addEventListener('keyup', (event) => {
-    console.log("⬆️ Tecla largada:", event.key);
+    //console.log("⬆️ Tecla largada:", event.key);
     keysPressed[event.key] = false;
     if (event.key === 'Shift') {
         isSprinting = false;
@@ -171,8 +169,8 @@ document.addEventListener('keyup', (event) => {
 
 
 function tweakVariables() {
-    settings.jumpSpeed = 0.3;
-    settings.gravity = 0.07;
+    settings.jumpSpeed = 0.4;
+    settings.gravity = 0.05;
     settings.acceleration = 0.2;
     settings.maxSpeed = 0.5;
     settings.smoothingFactor = isJumping ? 0.1 : 0.35; // Mais suave quando a saltar
@@ -221,11 +219,11 @@ function handleMovement() {
     objetoMario.position.x += currentSpeedX;
 
     // Roda o Mario consoante a direção
-    if (currentSpeedX < 0) {
-        objetoMario.rotation.y += (0 - objetoMario.rotation.y) * 0.5;
-    } else if (currentSpeedX > 0) {
-        objetoMario.rotation.y += (Math.PI - objetoMario.rotation.y) * 0.5;
-    }
+   if (currentSpeedX < 0) {
+    objetoMario.rotation.y += (-Math.PI / 2 - objetoMario.rotation.y) * 0.15;
+} else if (currentSpeedX > 0) {
+    objetoMario.rotation.y += (Math.PI / 2 - objetoMario.rotation.y) * 0.15;
+}
 }
 
 function applyGravity() {
@@ -334,6 +332,132 @@ function applyGravity() {
 
 //----------------------------------------------------
 
+// Secção de criação de Espinhos-------------------------------------------------------------
+
+// Criar um grupo para os espinhos
+const spikeGroup = new THREE.Group();
+
+// Parâmetros
+const spikeBaseRadius = 0.3;
+const spikeMinHeight = 0.5;
+const spikeMaxHeight = 1.5;
+const spacing = 1; // distância entre espinhos
+
+//Material Imports
+
+const loader = new THREE.TextureLoader();
+
+const albedoMap = loader.load('Objetos/textures/metal/albedo.png');
+
+console.log(albedoMap);
+const normalMap = loader.load('Objetos/textures/metal/normal.png');
+const roughnessMap = loader.load('Objetos/textures/metal/roughness.png');
+const metalnessMap = loader.load('Objetos/textures/metal/metallic.png');
+
+const spikeMaterial = new THREE.MeshStandardMaterial({
+  map: albedoMap,
+  normalMap: normalMap,
+  roughnessMap: roughnessMap,
+  metalnessMap: metalnessMap,
+  metalness: 1, // garante que tem efeito
+  roughness: 0.5 // ajustável
+ 
+});
+// Criar os 9 espinhos (3x3)
+for (let row = 0; row < 3; row++) {
+  for (let col = 0; col < 3; col++) {
+    // Altura aleatória
+    const height = THREE.MathUtils.randFloat(spikeMinHeight, spikeMaxHeight);
+
+    // Geometria do espinho (cone)
+    const spikeGeometry = new THREE.ConeGeometry(0.5, height, 4); // 4 segmentos = base quadrada
+    spikeGeometry.scale(1, 1.5, 1); // estica mais verticalmente
+    const spikeMesh = new THREE.Mesh(spikeGeometry, spikeMaterial);
+
+    // Centralizar a base do cone no chão (por padrão o cone aponta para cima)
+    spikeMesh.position.y = (height*1.5) / 2;
+
+    // Posicionar na grid
+    spikeMesh.position.x = (col - 1) * spacing;
+    spikeMesh.position.z = (row - 1) * spacing;
+
+    // Adicionar ao grupo
+    spikeGroup.add(spikeMesh);
+  }
+
+ 
+}
+// Adição de uma base quadrada e aro em volta dos espinhos----------------
+// Criar a base 
+const baseSize = 3.2; // Tamanho da base
+const baseHeight = 0.2;
+const baseGeometry = new THREE.BoxGeometry(baseSize, baseHeight, baseSize);
+const baseMaterial = new THREE.MeshStandardMaterial({
+  map: albedoMap,
+  normalMap: normalMap,
+  roughnessMap: roughnessMap,
+  metalnessMap: metalnessMap,
+  metalness: 1, // garante que tem efeito
+  roughness: 0.5 // ajustável
+ 
+});
+const baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
+
+// Posicionar a base
+baseMesh.position.y = baseHeight / 2 - 0.01;
+spikeGroup.add(baseMesh);
+
+
+
+// Função para criar um grupo de espinhos
+function createSpikeGroup(x, z, numSpikes = 9) {
+  // Criar um grupo para os espinhos
+  const spikeGroup = new THREE.Group();
+
+  // Parâmetros para os espinhos
+  const spikeMinHeight = 0.5;
+  const spikeMaxHeight = 1.5;
+  const spacing = 1; // distância entre os espinhos
+
+  // Criar os espinhos dentro do grupo
+  for (let row = 0; row < Math.sqrt(numSpikes); row++) { // Aqui estamos criando 9 espinhos (3x3)
+    for (let col = 0; col < Math.sqrt(numSpikes); col++) {
+      // Altura aleatória para o espinho
+      const height = THREE.MathUtils.randFloat(spikeMinHeight, spikeMaxHeight);
+
+      // Geometria do espinho (cone)
+      const spikeGeometry = new THREE.ConeGeometry(0.5, height, 4); // 4 segmentos = base quadrada
+      spikeGeometry.scale(1, 1.5, 1); // estica mais verticalmente
+
+      // Criar o material para o espinho
+      const spikeMesh = new THREE.Mesh(spikeGeometry, spikeMaterial);
+
+      // Centralizar a base do cone no chão
+      spikeMesh.position.y = height / 2;
+
+      // Posicionar na grid
+      spikeMesh.position.x = (col - 1) * spacing; // Ajusta a posição horizontal
+      spikeMesh.position.z = (row - 1) * spacing; // Ajusta a posição vertical
+
+      // Adicionar ao grupo de espinhos
+      spikeGroup.add(spikeMesh);
+    }
+  }
+
+  // Posicionar o grupo de espinhos na posição especificada
+  spikeGroup.position.set(x, 0, z); // Coloca o grupo no ponto desejado
+
+  // Adicionar o grupo de espinhos ao cenário
+  scene.add(spikeGroup);
+}
+
+
+//------------------------------------------------------------------------
+
+
+
+
+
 function Start() {
 
 
@@ -356,6 +480,13 @@ function Start() {
     cena.add(luzDirecional);
 
     cena.add(plane);
+
+   
+    spikeGroup.scale.set(0.1, 0.1, 0.1); // Reduz para 30% do tamanho original
+    spikeGroup.position.y = 0.5; // Ajusta a altura dos espinhos
+    spikeGroup.position.z = -2; 
+
+
 
     renderer.render(cena, cameraPerspetiva);
 
@@ -394,44 +525,79 @@ function Start() {
     
      
     // });
+
+   
     
 
-    importer.load('Objetos/marioModel.fbx', function (object) {
+    importer.load('Objetos/MarioModelRigged.fbx', function (object) {
 
         mixerAnimacao = new THREE.AnimationMixer(object);
        
-    
+        
+        if (object.animations && object.animations.length > 0) {
+        object.animations.forEach((clip) => {
+            animations[clip.name] = mixerAnimacao.clipAction(clip);
+        });
+        }
+
+        const primeira = object.animations[0].name;
+        animations[primeira].play();
+        currentAction = animations[primeira];
+
         object.traverse(function (child) {
             if (child.isMesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
             }
         });
-    
+        console.log("Animações:", Object.keys(animations));
        
     
-        object.scale.x = 1;
-        object.scale.y = 1;
-        object.scale.z = 1;
+        object.scale.x = 0.01;
+        object.scale.y = 0.01;
+        object.scale.z = 0.01;
     
         object.position.x = 0;
         object.position.y = 0;
         object.position.z = -10;
+        
+    
 
         object.velocityX = 0;
         cena.add(object);
         objetoMario = object;
-    
+
+        objetoMario.rotation.y = -Math.PI / 2;
+        
+        
+       
      
     });
+
+
 
     //initParticles(); // Inicializa o sistema de partículas
 
     requestAnimationFrame(loop);
 }
 
+
+
+
+let currentAction = null;
+
+let animations = {};
+
+function trocarAnimacao(novaAnimacao) {
+    if (animations[novaAnimacao] && currentAction !== animations[novaAnimacao]) {
+        currentAction.fadeOut(0.3);
+        currentAction = animations[novaAnimacao];
+        currentAction.reset().fadeIn(0.3).play();
+    }
+}
+
 function loop() {
-    console.log("Loop iniciado!");
+    //log("Loop iniciado!");
     const delta = relogio.getDelta(); // Get the time elapsed since the last frame
     if (mixerAnimacao) {
         mixerAnimacao.update(delta); // Update the animation mixer
@@ -442,16 +608,20 @@ function loop() {
     if (jumpBufferTimer <= 0) jumpBuffered = false;
     
     updateSprintState(delta); // Atualiza o estado de sprinting
-    if (isSprinting) {
-        console.log("🏃‍♂️ Mario está a correr!");
-    } else {
-        console.log("🚶 Mario está a andar.");
-    }
     handleMovement();
     
 
     cayoteTimer -= delta;
     applyGravity();
+
+
+     if (isJumping) {
+        trocarAnimacao("Jump1");
+    } else if (Math.abs(currentSpeedX) > 0.01) {
+        trocarAnimacao("Run");
+    } else {
+        trocarAnimacao("idle");
+    }
 
     //emitDustParticles();
     //updateParticles(relogio.getDelta());
