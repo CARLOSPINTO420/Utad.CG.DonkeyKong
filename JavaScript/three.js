@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import {FBXLoader} from 'FBXLoader';
+import { FontLoader } from 'FontLoader';
+import { TextGeometry } from 'TextGeometry';
 
 document.addEventListener('DOMContentLoaded', Start);
 
@@ -12,8 +14,6 @@ renderer.shadowMap.enabled = true;
 
 var cameraPerspetiva = new THREE.PerspectiveCamera(60,16/9,0.1,100); 
 cameraPerspetiva.position.set(0, 8, 10);
-
-const livesDisplay = document.getElementById('lives');
 
 renderer.setSize(window.innerWidth - 15, window.innerHeight - 80);
 renderer.setClearColor(0x202020);
@@ -141,8 +141,17 @@ let isWalking = false;
 let lives = 3; // Starting live
 const spawnPosition = new THREE.Vector3(-10, 1, -10); // Spawn position for the cube
 
+let backgroundMusic; // Reference to the background music
+
+let isGameOver = false; // Flag to disable gravity when the game is over
+
 document.addEventListener('keydown', (event) => {
-    keysPressed[event.key] = true; 
+    keysPressed[event.key] = true;
+
+    if (event.key === 'r' && lives === 0) {
+        restartGame(); // Restart the game when 'R' is pressed and lives are 0
+    }
+
     if (event.key === 'w' && !isJumping) {
         velocityY = jumpSpeed;
         isJumping = true;
@@ -150,20 +159,6 @@ document.addEventListener('keydown', (event) => {
         jumpAudio.volume = 0.5;
         jumpAudio.play();
     }
-    if(event.key === 'a' && keysPressed[event.key] === true && !isWalking) {
-        //const walkAudio = new Audio('Audio/walking.wav');
-        // walkAudio.volume = 0.2;
-        // walkAudio.play();
-        
-        // isWalking = true;
-    }
-    if(event.key === 'd' && keysPressed[event.key] === true && !isWalking) {
-        // const walkAudio = new Audio('Audio/walking.wav');
-        // walkAudio.volume = 0.2;
-        // walkAudio.play();
-        // isWalking = true;
-    }
-    
 });
 
 document.addEventListener('keyup', (event) => {
@@ -171,6 +166,60 @@ document.addEventListener('keyup', (event) => {
     isWalking = false;
 
 });
+
+function restartGame() {
+    // Reset lives
+    lives = 3;
+    updateText(); // Update the lives text
+    meshCubo.position.copy(spawnPosition);
+
+    // Ensure the cube is added back to the scene
+    if (!cena.children.includes(meshCubo)) {
+        cena.add(meshCubo);
+    }
+
+    // Reset the cube's visibility
+    meshCubo.visible = true;
+
+    // Remove all barrels from the scene
+    barrels.forEach((barrel) => {
+        cena.remove(barrel);
+    });
+    barrels.length = 0; // Clear the barrels array
+
+    // Remove the "Game Over" text if it exists
+    if (gameOverTextMesh) {
+        cena.remove(gameOverTextMesh);
+        gameOverTextMesh = null;
+    }
+
+    // Remove the "Press R to restart" text if it exists
+    if (restartTextMesh) {
+        cena.remove(restartTextMesh);
+        restartTextMesh = null;
+    }
+
+    // Reset the game state
+    isGameOverDisplayed = false;
+    isGameOver = false; // Reset the game over flag
+
+    // Restart barrel spawning
+    barrelSpawnInterval = setInterval(() => {
+        spawnBarrel();
+    }, 2000);
+
+    // Restart the background music
+    if (backgroundMusic) {
+        backgroundMusic.pause();
+        backgroundMusic.currentTime = 0; // Reset the music
+    }
+    playBackgroundMusic(); // Start the background music again
+    meshCubo.position.set(-10, 2, -10);
+    console.log(meshCubo.position);
+    console.log(meshCubo.visible);
+    meshCubo.position.set(-10, 2, -10);
+    console.log("Game restarted!");
+}
 
 function handleMovement() {
     const raycaster = new THREE.Raycaster();
@@ -191,7 +240,14 @@ function handleMovement() {
     }
 }
 
+let disableGravityForOneFrame = false;
+
 function applyGravity() {
+    if (isGameOver || disableGravityForOneFrame) {
+        disableGravityForOneFrame = false; // Reset the flag after one frame
+        return; // Skip gravity if the game is over or temporarily disabled
+    }
+
     const raycasterDown = new THREE.Raycaster();
     const raycasterUp = new THREE.Raycaster();
     const downDirection = new THREE.Vector3(0, -1, 0);
@@ -229,6 +285,102 @@ function applyGravity() {
         }
     }
     meshCubo.position.y += velocityY;
+}
+
+let gameOverTextMesh; // Reference to the "Game Over" text mesh
+let restartTextMesh; // Reference to the "Press R to restart" text mesh
+let isGameOverDisplayed = false; // Flag to ensure "Game Over" is displayed only once
+
+function displayGameOverText() {
+    if (!loadedFont || isGameOverDisplayed) return; // Ensure the font is loaded and text is not already displayed
+
+    // Stop the background music
+    if (backgroundMusic) {
+        backgroundMusic.pause();
+        backgroundMusic.currentTime = 0; // Reset the music
+    }
+
+    // Play the game over sound
+    const gameOverSound = new Audio('Audio/gameOver.wav');
+    gameOverSound.volume = 0.7;
+    gameOverSound.play();
+
+    // Set the game over flag
+    isGameOver = true;
+
+    // Create "Game Over" text geometry
+    const gameOverGeometry = new TextGeometry("Game Over", {
+        font: loadedFont,
+        size: 1, // Size of the text
+        height: 0.3, // Depth of the text
+        curveSegments: 12,
+        bevelEnabled: true,
+        bevelThickness: 0.03,
+        bevelSize: 0.02,
+        bevelSegments: 5,
+    });
+
+    // Create a material for the "Game Over" text
+    const gameOverMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 }); // Red color for "Game Over"
+    gameOverTextMesh = new THREE.Mesh(gameOverGeometry, gameOverMaterial);
+
+    // Initial position of the "Game Over" text
+    gameOverTextMesh.position.set(-6.5, 8, -100); // Start far from the camera
+    gameOverTextMesh.scale.set(1, 1, 1);
+
+    // Add the "Game Over" text to the scene
+    cena.add(gameOverTextMesh);
+
+    isGameOverDisplayed = true; // Set the flag to true
+
+    // Animate the "Game Over" text moving closer to the camera
+    const startTime = performance.now();
+    const animationDuration = 3500; // 7 seconds
+    const targetPositionZ = -50; // Final position closer to the camera
+
+    function animateGameOverText() {
+        const elapsedTime = performance.now() - startTime;
+        const progress = Math.min(elapsedTime / animationDuration, 1); // Clamp progress to [0, 1]
+
+        // Interpolate the Z position of the text
+        gameOverTextMesh.position.z = -100 + (targetPositionZ + 100) * progress;
+
+        if (progress < 1) {
+            requestAnimationFrame(animateGameOverText); // Continue animation
+        } else {
+            // Once the animation is complete, display the "Press R to restart" text
+            displayRestartText();
+        }
+    }
+
+    animateGameOverText();
+}
+
+function displayRestartText() {
+    // Create "Press R to restart" text geometry
+    const restartGeometry = new TextGeometry("Press R to restart", {
+        font: loadedFont,
+        size: 0.2, // Smaller size for the text
+        height: 0.2, // Depth of the text
+        curveSegments: 12,
+        bevelEnabled: true,
+        bevelThickness: 0.02,
+        bevelSize: 0.01,
+        bevelSegments: 3,
+    });
+
+    // Create a material for the "Press R to restart" text
+    const restartMaterial = new THREE.MeshStandardMaterial({ color: 0xffff00 }); // White color for the smaller text
+    restartTextMesh = new THREE.Mesh(restartGeometry, restartMaterial);
+
+    // Position and scale the "Press R to restart" text
+    restartTextMesh.position.set(-2.5, 7, -50); // Position it below the "Game Over" text
+    restartTextMesh.scale.set(1, 1, 1);
+
+    // Add the "Press R to restart" text to the scene
+    cena.add(restartTextMesh);
+
+    isGameOverDisplayed = true; // Set the flag to true
 }
 
 function applyBarrelPhysics() {
@@ -272,6 +424,7 @@ function applyBarrelPhysics() {
                         barrel.userData.velocityY -= barrel.userData.gravity;
             barrel.position.y += barrel.userData.velocityY;
         }
+
         const barrelBoundingBox = new THREE.Box3().setFromObject(barrel);
         const cubeBoundingBox = new THREE.Box3().setFromObject(meshCubo);
 
@@ -279,17 +432,25 @@ function applyBarrelPhysics() {
             // Reduce lives and handle respawn or game over
             lives--;
             console.log(`Lives remaining: ${lives}`);
+            updateText();
 
             if (lives > 0) {
                 // Move the cube to the spawn position
                 meshCubo.position.copy(spawnPosition);
             } else {
-                // Hide the cube when lives reach 0
-                meshCubo.position.set(1000, 1000, 1000); // Move the cube out of view
+
+                meshCubo.position.set(0, 1000, -10);
                 console.log("Game Over!");
+                let DieMusic = new Audio('Audio/death.wav');
+
+                DieMusic.volume = 0.5;
+                DieMusic.play();
 
                 // Stop spawning barrels
                 clearInterval(barrelSpawnInterval);
+
+                // Display "Game Over" text
+                displayGameOverText();
             }
 
             // Remove the barrel
@@ -308,7 +469,7 @@ function breakBarrel(barrel) {
     const fragments = [];
 
     const audio = new Audio('Audio/barrel.mp3');
-    audio.volume = 0.2;
+    audio.volume = 0.1;
     audio.play();
 
     for (let i = 0; i < 10; i++) {
@@ -422,10 +583,10 @@ let barrelSpawnInterval = setInterval(() => {
 }, 2000);
 
 function playBackgroundMusic() {
-    const audio = new Audio('Audio/bacmusic.wav');
-    audio.loop = true;
-    audio.volume = 0.5;
-    audio.play();
+    backgroundMusic = new Audio('Audio/bacmusic.wav');
+    backgroundMusic.loop = true;
+    backgroundMusic.volume = 0.5;
+    backgroundMusic.play();
 }
 
 function makeBarrel(radius, Radius, heigth){
@@ -446,6 +607,51 @@ function makeBarrel(radius, Radius, heigth){
     return barrel;
 }
 
+let textMesh;
+let loadedFont; // Variable to store the loaded font
+
+const loaderText = new FontLoader();
+loaderText.load('./Fonts/Daydream_Thin.json', function (font) {
+    console.log("Font loaded successfully");
+    loadedFont = font; // Store the loaded font for later use
+    updateText(); // Call updateText initially to display the text
+});
+
+// Define updateText as a global function
+function updateText() {
+    if (!loadedFont) return; // Ensure the font is loaded before updating the text
+
+    // Remove the old text mesh if it exists
+    if (textMesh) {
+        cena.remove(textMesh);
+    }
+
+    // Create new text geometry with the updated lives
+    const textGeometry = new TextGeometry(`Lives -> ${'X'.repeat(lives)}`, {
+        font: loadedFont,
+        size: 0.5,
+        height: 0.2,
+        curveSegments: 12,
+        bevelEnabled: true,
+        bevelThickness: 0.03,
+        bevelSize: 0.02,
+        bevelSegments: 5,
+    });
+
+    // Create a new text mesh
+    const textMaterial = new THREE.MeshStandardMaterial({ color: 0xff6347 });
+    textMesh = new THREE.Mesh(textGeometry, textMaterial);
+
+    // Position and scale the text
+    textMesh.scale.set(0.5, 0.5, 0.5);
+    textMesh.rotation.x = -Math.PI /7.25;
+    textMesh.rotation.y = Math.PI /6.25;
+    textMesh.rotation.z = Math.PI /50;
+    textMesh.position.set(-19, -5, -18);
+
+    // Add the updated text to the scene
+    cena.add(textMesh);
+}
 
 function Start() {
     cena.add(meshCubo);
@@ -474,6 +680,8 @@ function Start() {
         handleMovement(); 
         applyGravity();
         applyBarrelPhysics(); 
+        updateText();
+        console.log(meshCubo.position);
         renderer.render(cena, cameraPerspetiva);
         requestAnimationFrame(loop);
     }
