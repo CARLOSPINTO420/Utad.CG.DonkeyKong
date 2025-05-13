@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {FBXLoader} from 'FBXLoader';
+
 document.addEventListener('DOMContentLoaded', Start);
 
 var mixerAnimacao;
@@ -10,13 +11,14 @@ var renderer = new THREE.WebGLRenderer();
 renderer.shadowMap.enabled = true;
 
 var cameraPerspetiva = new THREE.PerspectiveCamera(60,16/9,0.1,100); 
-cameraPerspetiva.position.set(0, 3, 3);
+cameraPerspetiva.position.set(0, 8, 10);
+
+const livesDisplay = document.getElementById('lives');
 
 renderer.setSize(window.innerWidth - 15, window.innerHeight - 80);
 renderer.setClearColor(0x202020);
 
 document.body.appendChild(renderer.domElement);
-
 
 var gerometriaCubo = new THREE.BoxGeometry(1,2,1);
 var materialTextura = new THREE.MeshStandardMaterial({color: 0x000000});
@@ -37,6 +39,7 @@ plane.rotation.x = - Math.PI / 2;
 plane.position.y = -1; 
 plane.receiveShadow = true;
 
+
 var tiltedPlaneGeometry = new THREE.BoxGeometry(10, 2,0.5);
 var tiltedPlaneMaterial = new THREE.MeshStandardMaterial({ color: 0x404040 });
 tiltedPlaneMaterial.side = THREE.DoubleSide;
@@ -44,10 +47,49 @@ tiltedPlaneMaterial.shadowSide = THREE.BackSide;
 var tiltedPlane = new THREE.Mesh(tiltedPlaneGeometry, tiltedPlaneMaterial);
 tiltedPlane.rotation.x = -Math.PI / 2;
 tiltedPlane.rotation.y = Math.PI / 36;
-tiltedPlane.position.set(0, 3, -10);
+tiltedPlane.position.set(-3, 3, -10);
 tiltedPlane.receiveShadow = true;
 tiltedPlane.castShadow = true;
 cena.add(tiltedPlane);
+
+
+const livesCount = document.getElementById('lives-count');
+
+var tiltedPlane2Geometry = new THREE.BoxGeometry(10, 2,0.5);
+var tiltedPlane2Material = new THREE.MeshStandardMaterial({ color: 0x404040 });
+tiltedPlane2Material.side = THREE.DoubleSide;
+tiltedPlane2Material.shadowSide = THREE.BackSide;
+var tiltedPlane2 = new THREE.Mesh(tiltedPlane2Geometry, tiltedPlane2Material);
+tiltedPlane2.rotation.x = -Math.PI / 2;
+tiltedPlane2.rotation.y = -(Math.PI / 36);
+tiltedPlane2.position.set(2, 6 , -10);
+tiltedPlane2.receiveShadow = true;
+tiltedPlane2.castShadow = true;
+cena.add(tiltedPlane2);
+
+var tiltedPlane3Geometry = new THREE.BoxGeometry(10, 2,0.5);
+var tiltedPlane3Material = new THREE.MeshStandardMaterial({ color: 0x404040 });
+tiltedPlane3Material.side = THREE.DoubleSide;
+tiltedPlane3Material.shadowSide = THREE.BackSide;
+var tiltedPlane3 = new THREE.Mesh(tiltedPlane3Geometry, tiltedPlane3Material);
+tiltedPlane3.rotation.x = -Math.PI / 2;
+tiltedPlane3.rotation.y = Math.PI / 50;
+tiltedPlane3.position.set(-5, 11, -10);
+tiltedPlane3.receiveShadow = true;
+tiltedPlane3.castShadow = true;
+cena.add(tiltedPlane3);
+
+var tiltedPlane4Geometry = new THREE.BoxGeometry(10, 2,0.5);
+var tiltedPlane4Material = new THREE.MeshStandardMaterial({ color: 0x404040 });
+tiltedPlane4Material.side = THREE.DoubleSide;
+tiltedPlane4Material.shadowSide = THREE.BackSide;
+var tiltedPlane4 = new THREE.Mesh(tiltedPlane4Geometry, tiltedPlane4Material);
+tiltedPlane4.rotation.x = -Math.PI / 2;
+tiltedPlane4.rotation.y = -(Math.PI / 36);
+tiltedPlane4.position.set(3, 15 , -10);
+tiltedPlane4.receiveShadow = true;
+tiltedPlane4.castShadow = true;
+cena.add(tiltedPlane4);
 
 var planeEdges = new THREE.EdgesGeometry(planeGeometry);
 var planeEdgeMaterial = new THREE.LineBasicMaterial({ color: 0xffffff,linewidth: 10 });
@@ -79,12 +121,15 @@ importer.load('Objetos/marioModel.fbx', function (object) {
     objetoImportado = object;
 });
 
-const moveSpeed = 0.08;
-const jumpSpeed = 0.5;
+
+let livesMesh;
+const moveSpeed = 0.1;
+const jumpSpeed = 0.45;
 const gravity = 0.02;
 let velocityY = 0;
 let isJumping = false;
 const planes = [plane, tiltedPlane];
+
 
 const planeSize = 15;
 const halfPlaneSize = planeSize / 2;
@@ -92,6 +137,9 @@ const cubeSize = 2;
 
 const keysPressed = {};
 let isWalking = false;
+
+let lives = 3; // Starting live
+const spawnPosition = new THREE.Vector3(-10, 1, -10); // Spawn position for the cube
 
 document.addEventListener('keydown', (event) => {
     keysPressed[event.key] = true; 
@@ -183,9 +231,6 @@ function applyGravity() {
     meshCubo.position.y += velocityY;
 }
 
-let barrelVelocityY = 0; 
-const barrelGravity = 0.02;
-
 function applyBarrelPhysics() {
     barrels.forEach((barrel, index) => {
         const raycaster = new THREE.Raycaster();
@@ -204,37 +249,50 @@ function applyBarrelPhysics() {
             const barrelBottomY = barrelBoundingBox.min.y;
 
             const distanceToPlane = Math.abs(barrelBottomY - floorLevel);
+
             if (distanceToPlane < 0.01) {
-                const tiltAngleX = THREE.MathUtils.radToDeg(intersectedPlane.rotation.x);
-                const tiltAngleZ = THREE.MathUtils.radToDeg(intersectedPlane.rotation.z);
+                const tiltAngleX = intersectedPlane.rotation.y;
 
-                if (Math.abs(tiltAngleX) > 10) {
-                    const rollAccelerationZ = Math.sin(intersectedPlane.rotation.x) * 0.1;
-                    barrel.position.x -= rollAccelerationZ;
-                }
-
-                if (Math.abs(tiltAngleZ) > 10) {
-                    const rollAccelerationX = Math.sin(intersectedPlane.rotation.z) * 0.1;
-                    barrel.position.x -= rollAccelerationX;
+                if (tiltAngleX > 0) {
+                    barrel.position.x += Math.sin(tiltAngleX) * barrel.userData.speed; // Roll to the right
+                } else if (tiltAngleX < 0) {
+                    barrel.position.x -= Math.sin(tiltAngleX) * -barrel.userData.speed; // Roll to the left
                 }
             }
 
-            if (barrelBottomY > floorLevel || barrelVelocityY > 0) {
-                barrelVelocityY -= barrelGravity;
+            // Update the barrel's vertical position
+            if (barrelBottomY > floorLevel || barrel.userData.velocityY > 0) {
+                barrel.userData.velocityY -= barrel.userData.gravity;
             } else {
                 barrel.position.y += floorLevel - barrelBottomY;
-                barrelVelocityY = 0;
+                barrel.userData.velocityY = 0;
             }
-            barrel.position.y += barrelVelocityY;
+            barrel.position.y += barrel.userData.velocityY;
         } else {
-            barrelVelocityY -= barrelGravity;
-            barrel.position.y += barrelVelocityY;
+                        barrel.userData.velocityY -= barrel.userData.gravity;
+            barrel.position.y += barrel.userData.velocityY;
         }
-
         const barrelBoundingBox = new THREE.Box3().setFromObject(barrel);
         const cubeBoundingBox = new THREE.Box3().setFromObject(meshCubo);
 
         if (barrelBoundingBox.intersectsBox(cubeBoundingBox)) {
+            // Reduce lives and handle respawn or game over
+            lives--;
+            console.log(`Lives remaining: ${lives}`);
+
+            if (lives > 0) {
+                // Move the cube to the spawn position
+                meshCubo.position.copy(spawnPosition);
+            } else {
+                // Hide the cube when lives reach 0
+                meshCubo.position.set(1000, 1000, 1000); // Move the cube out of view
+                console.log("Game Over!");
+
+                // Stop spawning barrels
+                clearInterval(barrelSpawnInterval);
+            }
+
+            // Remove the barrel
             breakBarrel(barrel);
             barrels.splice(index, 1);
         }
@@ -344,18 +402,24 @@ function spawnBarrel() {
     bottomBand.castShadow = true;
     barrel.add(bottomBand); 
 
-    barrel.position.set(-4, 10, -10);
+    barrel.position.set(4, 20, -10);
     barrel.scale.set(1, 1, 1);
     barrel.rotation.y = Math.PI / 2;
     barrel.rotation.z = Math.PI / 2;
+
+    barrel.userData = {
+        speed: 1,
+        velocityY: 0,
+        gravity: 0.02
+          };
     
     cena.add(barrel);
     barrels.push(barrel);
 }
 
-setInterval(() => {
+let barrelSpawnInterval = setInterval(() => {
     spawnBarrel();
-    }, 2000);
+}, 2000);
 
 function playBackgroundMusic() {
     const audio = new Audio('Audio/bacmusic.wav');
@@ -382,8 +446,12 @@ function makeBarrel(radius, Radius, heigth){
     return barrel;
 }
 
+
 function Start() {
     cena.add(meshCubo);
+    planes.push(tiltedPlane2)
+    planes.push(tiltedPlane3)
+    planes.push(tiltedPlane4)
 
     var luzAmbiente = new THREE.AmbientLight(0x404040, 5);
     cena.add(luzAmbiente);
