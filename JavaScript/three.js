@@ -45,6 +45,26 @@ var planeEdgeLines = new THREE.LineSegments(planeEdges, planeEdgeMaterial);
 plane.add(planeEdgeLines);
 
 
+// Platform properties
+class Platform {
+    constructor(x, y, z, width, depth, color = 0x00ff00) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.width = width;
+        this.depth = depth;
+        this.color = color;
+        this.mesh = null;
+    }
+}
+
+// Array to store all platforms
+const platforms = [];
+
+    // Player collision box dimensions
+const PLAYER_HEIGHT = 0.01; // Adjust based on your Mario model's height
+const PLAYER_WIDTH = 0.01; // Adjust based on your Mario model's width
+const PLAYER_DEPTH = 0.01; // Adjust based on your Mario model's depth
 // Variaveis de movimento e salto
 
 
@@ -104,6 +124,38 @@ const keysPressed = {};
 const walkSpeed = 0.09;
 
 let currentMaxSpeed = walkSpeed;
+
+
+//Funcao para criar plataformas
+
+function createPlatform(x, y, z, width, depth, color = 0x00ff00) {
+    const platformGeometry = new THREE.BoxGeometry(width, 0.2, depth);
+    const platformMaterial = new THREE.MeshStandardMaterial({ 
+        color: color,
+        roughness: 0.8,
+        metalness: 0.2
+    });
+    
+    const platformMesh = new THREE.Mesh(platformGeometry, platformMaterial);
+    platformMesh.position.set(x, y, z);
+    platformMesh.receiveShadow = true;
+    platformMesh.castShadow = true;
+    
+    // Add edges for better visibility
+    const edges = new THREE.EdgesGeometry(platformGeometry);
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+    const line = new THREE.LineSegments(edges, lineMaterial);
+    platformMesh.add(line);
+    
+    cena.add(platformMesh);
+    
+    // Store platform in array
+    const platform = new Platform(x, y, z, width, depth, color);
+    platform.mesh = platformMesh;
+    platforms.push(platform);
+    
+    return platform;
+}
 
 function updateSprintState(delta) {
     const moving = keysPressed['a'] || keysPressed['d'];
@@ -227,9 +279,67 @@ function handleMovement() {
 }
 
 function applyGravity() {
-    if(!objetoMario) return;
-    const floorLevel = plane.position.y + cubeSize / 2;
-
+    if (!objetoMario) return;
+    
+    // Default floor level is the ground plane
+    let floorLevel = plane.position.y + cubeSize / 2;
+    let onPlatform = false;
+    
+    // Player's collision box bounds
+    const playerBounds = {
+        minX: objetoMario.position.x - PLAYER_WIDTH/2,
+        maxX: objetoMario.position.x + PLAYER_WIDTH/2,
+        minZ: objetoMario.position.z - PLAYER_DEPTH/2,
+        maxZ: objetoMario.position.z + PLAYER_DEPTH/2,
+        bottom: objetoMario.position.y - PLAYER_HEIGHT/2,
+        top: objetoMario.position.y + PLAYER_HEIGHT/2
+    };
+    
+    // Check collision with platforms
+    for (const platform of platforms) {
+        // Platform bounds
+        const platformBounds = {
+            minX: platform.x - platform.width/2,
+            maxX: platform.x + platform.width/2,
+            minZ: platform.z - platform.depth/2,
+            maxZ: platform.z + platform.depth/2,
+            top: platform.y + 0.1, // Slightly above platform surface
+            bottom: platform.y - 0.2 // Platform thickness
+        };
+        
+        // Check if player is vertically overlapping with platform
+        const verticalOverlap = playerBounds.bottom < platformBounds.top && 
+                              playerBounds.top > platformBounds.bottom;
+        
+        if (verticalOverlap) {
+            // Check X-axis overlap
+            const xOverlap = playerBounds.maxX > platformBounds.minX && 
+                            playerBounds.minX < platformBounds.maxX;
+            
+            // Check Z-axis overlap
+            const zOverlap = playerBounds.maxZ > platformBounds.minZ && 
+                            playerBounds.minZ < platformBounds.maxZ;
+            
+            // If all axes overlap, we're colliding with the platform
+            if (xOverlap && zOverlap) {
+                // Check if we're coming from above (falling onto platform)
+                if (velocityY <= 0 && playerBounds.bottom <= platformBounds.top) {
+                    floorLevel = platformBounds.top + PLAYER_HEIGHT/2;
+                    onPlatform = true;
+                    break;
+                }
+                // Check if we're hitting the platform from below (jumping into it)
+                else if (velocityY > 0 && playerBounds.top >= platformBounds.bottom) {
+                    // Stop upward movement
+                    velocityY = 0;
+                    objetoMario.position.y = platformBounds.bottom - PLAYER_HEIGHT/2;
+                    break;
+                }
+            }
+        }
+    }
+    
+    // Existing gravity/jump logic with platform support
     if ((cayoteTimer > 0 || !isJumping) && jumpBuffered) jumpBuffered = false;
 
     if (objetoMario.position.y > floorLevel || velocityY > 0) {
@@ -239,15 +349,18 @@ function applyGravity() {
     } else {
         if (isJumping) {
             objetoMario.position.x += objetoMario.velocityX || 0;
-            cayoteTimer = settings.cayoteTime;
+            cayoteTimer = cayoteTime;
             lastGroundTime = relogio.getElapsedTime();
+            
+            if (onPlatform) {
+                console.log("Landed on platform!");
+            }
         }
         objetoMario.position.y = floorLevel;
         velocityY = 0;
         objetoMario.velocityX = 0;
         isJumping = false;
     }
-   
 }
 
 // trata de particulas de correr
@@ -458,8 +571,10 @@ function createSpikeGroup(x, z, numSpikes = 9) {
 
 
 
-function Start() {
 
+function Start() {
+    // parametros: x,y,z, comprimento, largura, cor
+    createPlatform(20, 10, -10, 10, 2, 0x44aa88); //Main platform
 
     var luzAmbiente = new THREE.AmbientLight(0x404040, 100);
     cena.add(luzAmbiente);
@@ -527,7 +642,7 @@ function Start() {
     // });
 
    
-    
+
 
     importer.load('Objetos/MarioModelRigged.fbx', function (object) {
 
