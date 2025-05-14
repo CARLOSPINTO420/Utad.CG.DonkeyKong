@@ -595,7 +595,7 @@ function trocarAnimacao(novaAnimacao) {
         currentAction.reset().fadeIn(0.3).play();
     }
 }
-
+let saltoCount = 0;
 function loop() {
     //log("Loop iniciado!");
     const delta = relogio.getDelta(); // Get the time elapsed since the last frame
@@ -615,12 +615,26 @@ function loop() {
     applyGravity();
 
 
-     if (isJumping) {
-        trocarAnimacao("Jump1");
+      if (isJumping) {
+        // Verificar qual animação de salto tocar, dependendo de quantos saltos consecutivos o jogador fez
+        if (saltoCount === 0) {
+            trocarAnimacao("Jump1");
+        } else if (saltoCount === 1) {
+            trocarAnimacao("Jump2");
+        } else if (saltoCount === 2) {
+            trocarAnimacao("Jump3");
+        }
+
+        saltoCount++; // Incrementa o contador de saltos
+
+        
     } else if (Math.abs(currentSpeedX) > 0.01) {
         trocarAnimacao("Run");
+        saltoCount = 0;
     } else {
+        saltoCount = 0;
         trocarAnimacao("idle");
+
     }
 
     //emitDustParticles();
