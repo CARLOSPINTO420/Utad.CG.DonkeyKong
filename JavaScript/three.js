@@ -309,24 +309,6 @@ for (let row = 0; row < 3; row++) {
  
 }
 // Adição de uma base quadrada e aro em volta dos espinhos----------------
-// Criar a base 
-const baseSize = 3.2; // Tamanho da base
-const baseHeight = 0.2;
-const baseGeometry = new THREE.BoxGeometry(baseSize, baseHeight, baseSize);
-const baseMaterial = new THREE.MeshStandardMaterial({
-  map: albedoMap,
-  normalMap: normalMap,
-  roughnessMap: roughnessMap,
-  metalnessMap: metalnessMap,
-  metalness: 1, // garante que tem efeito
-  roughness: 0.5 // ajustável
- 
-});
-const baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
-
-// Posicionar a base
-baseMesh.position.y = baseHeight / 2 - 0.01;
-spikeGroup.add(baseMesh);
 
 
 
@@ -365,11 +347,31 @@ function createSpikeGroup(x, z, numSpikes = 9) {
     }
   }
 
+    // Criar a base 
+    const baseSize = 3.2; // Tamanho da base
+    const baseHeight = 0.2;
+    const baseGeometry = new THREE.BoxGeometry(baseSize, baseHeight, baseSize);
+    const baseMaterial = new THREE.MeshStandardMaterial({
+    map: albedoMap,
+    normalMap: normalMap,
+    roughnessMap: roughnessMap,
+    metalnessMap: metalnessMap,
+    metalness: 1, // garante que tem efeito
+    roughness: 0.5 // ajustável
+    
+    });
+    const baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
+
+    // Posicionar a base
+    baseMesh.position.y = baseHeight / 2 -0.4; 
+    spikeGroup.add(baseMesh);
+
+
   // Posicionar o grupo de espinhos na posição especificada
   spikeGroup.position.set(x, 0, z); // Coloca o grupo no ponto desejado
 
   // Adicionar o grupo de espinhos ao cenário
-  scene.add(spikeGroup);
+  cena.add(spikeGroup);
 }
 
 
@@ -401,6 +403,7 @@ function Start() {
     cena.add(luzDirecional);
 
     cena.add(plane);
+    createSpikeGroup(0, -10, 9); // Adiciona os espinhos à cena
 
    
     spikeGroup.scale.set(0.1, 0.1, 0.1); // Reduz para 30% do tamanho original
