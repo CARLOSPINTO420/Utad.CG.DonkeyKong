@@ -497,13 +497,13 @@ function loop() {
       if (isJumping) {
         // Verificar qual animação de salto tocar, dependendo de quantos saltos consecutivos o jogador fez
        if (saltoCount === 0) {
-            trocarAnimacao("Jump1", 29.8); // ~0.2s
+            trocarAnimacao("Jump1", 1); 
     
         } else if (saltoCount === 1) {
-            trocarAnimacao("Jump2", 14.9); // ~0.4s
+            trocarAnimacao("Jump2", 1); 
        
         } else if (saltoCount === 2) {
-            trocarAnimacao("Jump3", 3.6); // ~0.7s
+            trocarAnimacao("Jump3", 1); 
       
         }
 
