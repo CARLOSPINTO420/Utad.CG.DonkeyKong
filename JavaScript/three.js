@@ -53,7 +53,8 @@ let settings = {
     gravity: 0.05,
     maxSpeed: 0.18,
     acceleration: 0.25,
-    smoothingFactor: 0.35
+    smoothingFactor: 0.35,
+    cayoteTime: 0.15,
 
 
 };
@@ -177,26 +178,10 @@ function tweakVariables() {
 }
 
 
-
+//tweaking de animacoes de salto para melhor experiencia---------------------------
 
 
 function handleMovement() {
-    // const currentSpeed = isSprinting ? baseMoveSpeed * sprintMultiplier : baseMoveSpeed; //calcula a velocidade de movimento
-
-    // if (keysPressed['a'] && objetoMario.position.x - currentSpeed > -halfPlaneSize + cubeSize / 2) {
-    //     objetoMario.position.x -= currentSpeed;
-    //     objetoMario.rotation.y += (0 - objetoMario.rotation.y) * 0.5;
-    // }
-    // if (keysPressed['d'] && objetoMario.position.x + currentSpeed < halfPlaneSize - cubeSize / 2) {
-    //     objetoMario.position.x += currentSpeed;
-    //     objetoMario.rotation.y += (Math.PI - objetoMario.rotation.y) * 0.5;
-    // }
-    // if (!keysPressed['a'] && !keysPressed['d']) {
-    //     objetoMario.rotation.y += (0 - objetoMario.rotation.y) * 0.1; // suavemente volta à frente
-    // }
-    // if (isJumping) {
-    //     objetoMario.position.x += objetoMario.velocityX || 0;
-    // }
 
 
     if (!objetoMario) return;
@@ -250,87 +235,7 @@ function applyGravity() {
    
 }
 
-// trata de particulas de correr
 
-// let particleSystem;
-// let particleMaterial;
-// let particles = [];
-// const maxParticles = 200;
-// const particleLifetime = 0.5; // segundos
-
-// function initParticles() {
-//     const geometry = new THREE.BufferGeometry();
-//     const positions = new Float32Array(maxParticles * 3); // x, y, z por partícula
-
-//     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-//     geometry.setDrawRange(0, 0); // ← importante
-
-//     particleMaterial = new THREE.PointsMaterial({
-//         color: 0x808080,
-//         size: 0.4, // 
-//         transparent: true,
-//         opacity: 1.0, // ← mais opaco para ver melhor
-//         depthWrite: false // ← evita que se escondam atrás de outros objetos
-//     });
-
-//     particleSystem = new THREE.Points(geometry, particleMaterial);
-//     cena.add(particleSystem);
-// }
-
-// // faz a emissao de particulas de poeira
-
-// function emitDustParticles() {
-//     if (!objetoMario || !isSprinting) return;
-//     console.log("emissao de particulas de poeira");
-
-//     // Criar nova partícula
-//     const position = objetoMario.position.clone();
-//     position.y += 0.05; // Ajuste para aparecer um pouco acima do chão, mas mais controlado
-//     position.z = objetoMario.position.z + Math.random() * 0.1 - 0.05; // Menor variação no eixo Z
-//     position.x += Math.random() * 0.1 - 0.05; // Menor variação no eixo X
-
-//     particles.push({ position, age: 0 });
-
-//     if (particles.length > maxParticles) {
-//         particles.shift(); // remove a mais antiga
-//     }
-// }
-
-// // da atualizacao as particulas de poeira
-
-// function updateParticles(delta) {
-//     console.log("Total de partículas:", particles.length); // DEBUG
-//     const positions = particleSystem.geometry.attributes.position.array;
-
-//     for (let i = 0; i < particles.length; i++) {
-//         const p = particles[i];
-//         p.age += delta;
-//         const index = i * 3;
-
-//         // Fade out (opcional)
-//         if (p.age > particleLifetime) {
-//             particles.splice(i, 1);
-//             i--;
-//             continue;
-//         }
-
-//         // Atualiza posição
-//         positions[index] = p.position.x;
-//         positions[index + 1] = p.position.y;
-//         positions[index + 2] = p.position.z;
-
-//         // Ligeiro movimento ascendente
-//         p.position.y += 0.01;
-//     }
-
-//     particleSystem.geometry.setDrawRange(0, particles.length);
-//     particleSystem.geometry.attributes.position.needsUpdate = true;
-
-//     particleSystem.position.copy(objetoMario.position); // Posiciona o sistema de partículas na posição do Mario
-    
-// }
-
-//----------------------------------------------------
 
 // Secção de criação de Espinhos-------------------------------------------------------------
 
@@ -494,41 +399,6 @@ function Start() {
     tweakVariables(); // Ajusta as variáveis de movimento e salto para better testing
     
 
-    // Importacao de Modelos FBX
-
-    // importer.load('Objetos/DKModel.fbx', function (object) {
-
-    //     mixerAnimacao = new THREE.AnimationMixer(object);
-       
-    
-    //     object.traverse(function (child) {
-    //         if (child.isMesh) {
-    //             child.castShadow = true;
-    //             child.receiveShadow = true;
-    //         }
-    //     });
-    
-       
-    
-    //     object.scale.x = 0.01;
-    //     object.scale.y = 0.01;
-    //     object.scale.z = 0.01;
-    
-    //     object.rotation.x = 0;
-    //     object.rotation.z = 0;
-    
-    //     object.position.x = 0;
-    //     object.position.y = 0;
-    //     object.position.z = -10;
-    //     cena.add(object);
-    //     objetoDK = object;
-    
-     
-    // });
-
-   
-    
-
     importer.load('Objetos/MarioModelRigged.fbx', function (object) {
 
         mixerAnimacao = new THREE.AnimationMixer(object);
@@ -588,16 +458,25 @@ let currentAction = null;
 
 let animations = {};
 
-function trocarAnimacao(novaAnimacao) {
-    if (animations[novaAnimacao] && currentAction !== animations[novaAnimacao]) {
-        currentAction.fadeOut(0.3);
-        currentAction = animations[novaAnimacao];
-        currentAction.reset().fadeIn(0.3).play();
+function trocarAnimacao(novaAnimacao, velocidade = 1) {
+      const action = animations[novaAnimacao];
+    if (!action) {
+        console.warn("Animação não encontrada:", novaAnimacao);
+        return;
     }
+    if (currentAction === action) return; // mesma animação, nada a fazer
+
+    if (currentAction) currentAction.stop();
+
+    action.setEffectiveTimeScale(velocidade);
+    action.play();
+
+    currentAction = action;
 }
 let saltoCount = 0;
 function loop() {
     //log("Loop iniciado!");
+
     const delta = relogio.getDelta(); // Get the time elapsed since the last frame
     if (mixerAnimacao) {
         mixerAnimacao.update(delta); // Update the animation mixer
@@ -617,12 +496,15 @@ function loop() {
 
       if (isJumping) {
         // Verificar qual animação de salto tocar, dependendo de quantos saltos consecutivos o jogador fez
-        if (saltoCount === 0) {
-            trocarAnimacao("Jump1");
+       if (saltoCount === 0) {
+            trocarAnimacao("Jump1", 29.8); // ~0.2s
+    
         } else if (saltoCount === 1) {
-            trocarAnimacao("Jump2");
+            trocarAnimacao("Jump2", 14.9); // ~0.4s
+       
         } else if (saltoCount === 2) {
-            trocarAnimacao("Jump3");
+            trocarAnimacao("Jump3", 3.6); // ~0.7s
+      
         }
 
         saltoCount++; // Incrementa o contador de saltos
