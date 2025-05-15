@@ -171,7 +171,7 @@ document.addEventListener('keyup', (event) => {
 
 function tweakVariables() {
     settings.jumpSpeed = 0.4;
-    settings.gravity = 0.05;
+    settings.gravity = 0.04;
     settings.acceleration = 0.2;
     settings.maxSpeed = 0.5;
     settings.smoothingFactor = isJumping ? 0.1 : 0.35; // Mais suave quando a saltar
@@ -188,7 +188,7 @@ function handleMovement() {
 
     const grounded = !isJumping;
     const maxSpeed = isSprinting ? 0.18 : 0.09;
-    const airControlFactor = grounded ? 1 : 0.4; // Menos controlo no ar
+    const airControlFactor = grounded ? 1 : 0.85;
 
     let targetSpeed = 0;
 
@@ -198,17 +198,20 @@ function handleMovement() {
         targetSpeed = maxSpeed;
     }
 
-    // Aplica aceleração suavizada, ajustada para ar/solo
-    currentSpeedX += (targetSpeed - currentSpeedX) * (0.2 * airControlFactor);
+    const acceleration = grounded ? 0.2 : 0.12;
+
+    
+    currentSpeedX += (targetSpeed - currentSpeedX) * acceleration * airControlFactor;
+    
     
     objetoMario.position.x += currentSpeedX;
 
     // Roda o Mario consoante a direção
-   if (currentSpeedX < 0) {
-    objetoMario.rotation.y += (-Math.PI / 2 - objetoMario.rotation.y) * 0.15;
-} else if (currentSpeedX > 0) {
-    objetoMario.rotation.y += (Math.PI / 2 - objetoMario.rotation.y) * 0.15;
-}
+    if (currentSpeedX < 0) {
+        objetoMario.rotation.y += (-Math.PI / 2 - objetoMario.rotation.y) * 0.15;
+    } else if (currentSpeedX > 0) {
+        objetoMario.rotation.y += (Math.PI / 2 - objetoMario.rotation.y) * 0.15;
+    }
 }
 
 function applyGravity() {
@@ -235,6 +238,19 @@ function applyGravity() {
    
 }
 
+//Definir Plataformas para teste
+
+var tiltedPlaneGeometry = new THREE.BoxGeometry(10, 2,0.5);
+var tiltedPlaneMaterial = new THREE.MeshStandardMaterial({ color: 0x404040 });
+tiltedPlaneMaterial.side = THREE.DoubleSide;
+tiltedPlaneMaterial.shadowSide = THREE.BackSide;
+var tiltedPlane = new THREE.Mesh(tiltedPlaneGeometry, tiltedPlaneMaterial);
+tiltedPlane.rotation.x = -Math.PI / 2;
+tiltedPlane.rotation.y = Math.PI / 36;
+tiltedPlane.position.set(-3, 3, -10);
+tiltedPlane.receiveShadow = true;
+tiltedPlane.castShadow = true;
+cena.add(tiltedPlane);
 
 
 // Secção de criação de Espinhos-------------------------------------------------------------
