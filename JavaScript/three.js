@@ -458,21 +458,28 @@ let currentAction = null;
 
 let animations = {};
 
-function trocarAnimacao(novaAnimacao, velocidade = 1) {
+function trocarAnimacao(novaAnimacao, velocidade = 1, blendDuration = 0.1) {
       const action = animations[novaAnimacao];
     if (!action) {
         console.warn("Animação não encontrada:", novaAnimacao);
         return;
     }
     if (currentAction === action) return; // mesma animação, nada a fazer
-
-    if (currentAction) currentAction.stop();
-
+   // Prepara a nova ação
+    action.reset(); // começa do início
     action.setEffectiveTimeScale(velocidade);
-    action.play();
+    action.setEffectiveWeight(1.0);
 
+    // Faz crossfade a partir da animação anterior
+    if (currentAction) {
+        action.crossFadeFrom(currentAction, blendDuration, true);
+    }
+
+    action.play();
     currentAction = action;
 }
+
+
 let saltoCount = 0;
 function loop() {
     //log("Loop iniciado!");
@@ -511,11 +518,11 @@ function loop() {
 
         
     } else if (Math.abs(currentSpeedX) > 0.01) {
-        trocarAnimacao("Run");
-        saltoCount = 0;
+       trocarAnimacao("Run", 1, 0.3); // blend mais suave para corrida
+        saltoCount = 0; 
     } else {
-        saltoCount = 0;
-        trocarAnimacao("idle");
+        saltoCount = 0; 
+        trocarAnimacao("idle", 1, 0.3); // blend suave para idle
 
     }
 
