@@ -1,21 +1,49 @@
 <!DOCTYPE html>
 <html>
-    <head>
-    <title>
-        WebGL - Three.js
-    </title>
-    </head>
-    <body>
-        <script async="" src="https://unpkg.com/es-module-shims@2.0.10/dist/es-module-shims.js"></script>
-        <script type="importmap">
-                {
-                    "imports": {
-                        "three": "https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js",
-                        "FBXLoader":"https://unpkg.com/three@0.173.0/examples/jsm/loaders/FBXLoader.js"
-                    }
-                }
-        </script>
-        <script type="module" src="./JavaScript/three.js"></script>
-    </body>
+<head>
+  <title>WebGL - Three.js</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Moldura simples para o minimapa */
+    #minimap-frame {
+      position: absolute;
+      bottom: 87px;
+      right: 10px;
+      width: 20vw; /* ajusta conforme o teu setViewport */
+      height: 20vh;
+      border: 2px solid white;
+      pointer-events: none; /* permite clicar através da moldura */
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+      z-index: 10;
+    }
 
+    /* Garante que o canvas ocupa o ecrã todo por baixo */
+    canvas {
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <!-- Moldura do minimapa -->
+  <div id="minimap-frame"></div>
+
+  <!-- Scripts Three.js -->
+  <script async src="https://unpkg.com/es-module-shims@2.0.10/dist/es-module-shims.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js",
+        "FBXLoader":"https://unpkg.com/three@0.173.0/examples/jsm/loaders/FBXLoader.js",
+        "FontLoader":"https://unpkg.com/three@0.173.0/examples/jsm/loaders/FontLoader.js",
+        "TextGeometry":"https://unpkg.com/three@0.173.0/examples/jsm/geometries/TextGeometry.js"
+      }
+    }
+  </script>
+  <script type="module" src="./JavaScript/main.js"></script>
+</body>
 </html>
