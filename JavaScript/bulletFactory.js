@@ -81,7 +81,7 @@ export class BulletBill {
   }
 
   checkCollision(player) {
-      console.log('player:', player);
+ 
     if (!this.alive || !player || !player.position) return false;
     // Aqui pode ser uma colisão simples AABB
     const distX = Math.abs(this.mesh.position.x - player.position.x);

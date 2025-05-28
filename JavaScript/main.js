@@ -3,10 +3,13 @@ import {FBXLoader} from 'FBXLoader';
 import { FontLoader } from 'FontLoader';
 import { TextGeometry } from 'TextGeometry';
 import { planeFactory } from './planeFactory.js';
+import { createLadder } from './planeFactory.js';
 import { barrelFactory } from './BarrelFactory.js';
 import { spikeFactory } from './spikeFactory.js';
-import {criarBulletBill} from './bulletFactory.js';
+
 import { BulletBillSpawner } from './bulletFactory.js';
+
+import { createClimbingZone } from './planeFactory.js';
 
 // Inicializar a cena e o renderer ----
     //Cena
@@ -113,6 +116,10 @@ let settings = {
     cayoteTime: 0.15,
 };
 
+//variaveis de escada
+let isClimbingLadder = false;
+
+
 // variaveis de Sprint
 const sprintThreshold = 0.4;
 let isSprinting = false;
@@ -128,8 +135,11 @@ const sprintJumpXSpeed = 0.4;
 let cayoteTimer = 0;
 let jumpBuffered = false;
 let jumpBufferTimer = 0;
-const jumpBufferTime = 0.4; // Tempo máximo para encadear salto (em segundos)
-let lastGroundTime = 0;     // Quando tocou no chão pela última vez
+const jumpBufferTime = 0.2; // Tempo máximo para fazer buffer salto (em segundos)
+let lastGroundTime = 0;     // Tempo do último salto
+let lastJumpTime = 0; // Tempo do último salto para multi-jump
+const multiJumpWindow = 1.5; // segundos
+let lastJumpSequenceTime = 0;
 
 // Variaveis de teclas pressionadas
 const keysPressed = {};
@@ -169,6 +179,38 @@ const jumpAudio = new Audio('Audio/jump.wav');
 const backgroundMusic = new Audio('Audio/bacmusic.wav');
 const audio = new Audio('Audio/barrel.mp3');
 
+function performJump() {
+      const now = relogio.getElapsedTime();
+
+    // Só resetar jumpCount se passou tempo demais desde o último salto E o Mario está no chão (não pulando)
+    if ((now - lastJumpSequenceTime > multiJumpWindow) && !isJumping) {
+        jumpCount = 0;
+    }
+
+    lastJumpTime = now;
+    lastJumpSequenceTime = now;
+
+    isJumping = true;
+    jumpAudio.volume = 0.5;
+    jumpAudio.play();
+
+    if (jumpCount === 0) velocityY = settings.baseJumpSpeed;
+    else if (jumpCount === 1) velocityY = settings.baseJumpSpeed * 1.2;
+    else if (jumpCount === 2) {
+        velocityY = settings.baseJumpSpeed * 1.45;
+        jumpCount = -1; // pra voltar a 0 no próximo salto
+    }
+
+    jumpCount += 1;
+
+    objetoMario.velocityX = 0;
+
+    if (isSprinting) {
+        if (keysPressed['a']) objetoMario.velocityX = -sprintJumpXSpeed;
+        else if (keysPressed['d']) objetoMario.velocityX = sprintJumpXSpeed;
+    }
+}
+
 // KeyLogger
 document.addEventListener('keydown', (event) => {
     keysPressed[event.key] = true;
@@ -181,36 +223,12 @@ document.addEventListener('keydown', (event) => {
         isSprinting = true;
     }
 
- if (event.key === ' ' && !isJumping) {
+ if (event.key === ' ' ) {
   
         jumpBuffered = true;
         jumpBufferTimer = jumpBufferTime;
 
-        const now = relogio.getElapsedTime();
-        const grounded = !isJumping;
-
-        if (grounded) {
-            jumpCount = (now - lastGroundTime <= jumpBufferTime) ? jumpCount + 1 : 1;
-         
-        } else return;
-
-        isJumping = true;
-        jumpAudio.volume = 0.5;
-        jumpAudio.play();
-
-        if (jumpCount === 1) velocityY = settings.baseJumpSpeed;
-        else if (jumpCount === 2) velocityY = settings.baseJumpSpeed * 1.2;
-        else if (jumpCount === 3) {
-            velocityY = settings.baseJumpSpeed * 1.45;
-            jumpCount = 0;
-        }
-
-        objetoMario.velocityX = 0;
-
-        if (isSprinting) {
-            if (keysPressed['a']) objetoMario.velocityX = -sprintJumpXSpeed;
-            else if (keysPressed['d']) objetoMario.velocityX = sprintJumpXSpeed;
-        }
+       
     }
 });
 
@@ -317,8 +335,12 @@ function handleMovement() {
 
 let wasGrounded = false; // variável global para guardar estado anterior
 
-function applyGravity() {
+function applyGravity(delta) {
  if (!objetoMario) return;
+  if (isClimbingLadder) {
+        velocityY = 0;
+        return; // Não aplica gravidade se estiver a subir escada
+    }
 
   
 
@@ -395,6 +417,24 @@ function applyGravity() {
 
     }
 
+    if (grounded && !isJumping) {
+        lastGroundTime = relogio.getElapsedTime();
+    }
+
+    // Atualiza o timer do buffer
+    if (jumpBuffered) {
+        jumpBufferTimer -= delta; // deltaTime é o tempo entre frames
+
+        // Se o buffer expirou, cancela
+        if (jumpBufferTimer <= 0) {
+            jumpBuffered = false;
+        }
+    }
+
+ if (!isJumping && jumpBuffered) {
+    performJump();
+    jumpBuffered = false;
+}
   
 
     if (isGameOver || disableGravityForOneFrame) {
@@ -808,12 +848,54 @@ function Start() {
     applyBarrelPhysics(); 
     applyGravity();
     updateText();
+
+    lastJumpSequenceTime = relogio.getElapsedTime();
     
     requestAnimationFrame(loop);
 
     });
     
 }
+
+
+
+// Define a posição onde a escada será colocada
+const ladderPosition = new THREE.Vector3(15, 13, -11.5); // escada em -11.5
+
+// Cria a escada
+const ladder = createLadder(ladderPosition, 37, 2, 2);
+
+// Adiciona a escada à cena
+cena.add(ladder);
+
+// Cria a bounding box manualmente em z = -10
+const ladderBoundingBoxes = [];
+const ladderBoxSize = { x: 2, y: 38, z: 2 }; // usa os mesmos valores do createLadder
+const ladderBoxCenter = new THREE.Vector3(15, 13 + ladderBoxSize.y / 2, -10); // centro da box em z = -10
+
+const ladderBox = new THREE.Box3().setFromCenterAndSize(
+    ladderBoxCenter,
+    new THREE.Vector3(ladderBoxSize.x, ladderBoxSize.y, ladderBoxSize.z)
+);
+ladderBoundingBoxes.push(ladderBox);
+
+function checkLadderClimb() {
+    if (!objetoMario) return;
+    if(!ladderBoundingBoxes) return; // Verifica se as bounding boxes da escada existem
+    isClimbingLadder = false; // Reset a cada frame
+
+    const marioBox = new THREE.Box3().setFromObject(objetoMario);
+
+    for (let i = 0; i < ladderBoundingBoxes.length; i++) {
+        if (ladderBoundingBoxes[i].intersectsBox(marioBox)) {
+            isClimbingLadder = true;
+            objetoMario.position.y += 0.12; // Velocidade de subida
+            // trocarAnimacao("Climb", 1, 0.2); // Se tiveres animação de subir
+            break;
+        }
+    }
+}
+
 
 
 
@@ -834,7 +916,8 @@ function loop() {
     updateSprintState(delta);
     handleMovement();
     cayoteTimer -= delta;
-    applyGravity();
+    checkLadderClimb();
+    applyGravity(delta);
       if (isJumping) {
        if (saltoCount === 0) {
             trocarAnimacao("Jump1", 1); 
@@ -881,52 +964,214 @@ function loop() {
     requestAnimationFrame(loop);
 
 
-      spawner.update();
+     // spawner.update();
 }
-
-// Criar Bullet Bill teste
-const spawner = new BulletBillSpawner(cena, objetoMario);
-
 
 // Inicializacao das plataformas
 
-let tiltedPlane = planeFactory(new THREE.Vector3(-15, 5, -10), -Math.PI / 40, 10);
+let tiltedPlane = planeFactory(new THREE.Vector3(-15, 5, -10), -Math.PI / 50, 10);
 cena.add(tiltedPlane);
 planes.push(tiltedPlane);
 
-tiltedPlane = planeFactory(new THREE.Vector3(15, 16, -10), -Math.PI / 100, 10);
+tiltedPlane = planeFactory(new THREE.Vector3(15, 13, -10), 0, 10);
 cena.add(tiltedPlane);
 planes.push(tiltedPlane);
 
-tiltedPlane = planeFactory(new THREE.Vector3(0, 10, -10), Math.PI / 90, 10);
+tiltedPlane = planeFactory(new THREE.Vector3(-2, 8, -10), 0, 10);
 cena.add(tiltedPlane);
 planes.push(tiltedPlane);
 
-tiltedPlane = planeFactory(new THREE.Vector3(25, 16, -10), Math.PI / 100, 10);
+tiltedPlane = planeFactory(new THREE.Vector3(8, 10, -10), 0, 10);
 cena.add(tiltedPlane);
 planes.push(tiltedPlane);
 
-tiltedPlane = planeFactory(new THREE.Vector3(5, 23, -10), 0, 10);
+tiltedPlane = planeFactory(new THREE.Vector3(5, 18, -10), 0, 10);
 cena.add(tiltedPlane);
 planes.push(tiltedPlane);
 
-tiltedPlane = planeFactory(new THREE.Vector3(-5, 23, -10), 0, 10);
+tiltedPlane = planeFactory(new THREE.Vector3(-5, 20, -10), 0, 10);
 cena.add(tiltedPlane);
 planes.push(tiltedPlane);
 
-tiltedPlane = planeFactory(new THREE.Vector3(-25, 30, -10), Math.PI, 10);
+tiltedPlane = planeFactory(new THREE.Vector3(-15, 20, -10), Math.PI, 10);
 cena.add(tiltedPlane);
 planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(-25, 24, -10), Math.PI, 10);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(-15, 29, -10), Math.PI, 10);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+
+//Primeira Plataforma onde o jogar tem de usar a mecanica de double ou triple jump
+
+
+tiltedPlane = planeFactory(new THREE.Vector3(-25, 36, -10), Math.PI, 10);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(-15, 43, -10), Math.PI, 10);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(-3, 46, -10), Math.PI, 10);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(10, 50, -10), Math.PI, 10);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+//Checkpoint nesta plataforma
+
+tiltedPlane = planeFactory(new THREE.Vector3(0, 60, -10), Math.PI, 10);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(-8, 68, -10), Math.PI, 10);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+//*//
+
+
+tiltedPlane = planeFactory(new THREE.Vector3(-34, 70, -10), Math.PI, 30);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(-50, 75, -10), Math.PI, 15);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(-30, 85, -10), Math.PI, 50);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(-30, 95, -10), Math.PI, 50);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(-2, 89, -10), Math.PI, 1);
+cena.add
+tiltedPlane = planeFactory(new THREE.Vector3(-2, 89, -10), Math.PI, 1);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(-60, 103, -10), Math.PI, 10);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+//2nd Checkpoint nesta plataforma
+
+//Plataforma de Apoio
+tiltedPlane = planeFactory(new THREE.Vector3(10, 108, -10), Math.PI, 10);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+//Plataforma de Apoio
+
+
+tiltedPlane = planeFactory(new THREE.Vector3(-30, 110, -10), Math.PI, 40);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(-40, 117, -10), -Math.PI/70, 5);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(-36, 122, -10), -Math.PI/70, 5);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(-30, 127, -10), -Math.PI/70, 10);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+
+
+tiltedPlane = planeFactory(new THREE.Vector3(-28, 132, -10), -Math.PI/70, 5);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(-24, 137, -10), -Math.PI/70, 5);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(-18, 142, -10), -Math.PI/70, 10);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(0, 115, -10), -Math.PI/70, 10);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(10, 120, -10), -Math.PI/70, 10);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(7, 127, -10), Math.PI/70, 3);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(9, 138, -10), -Math.PI/70, 3);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(12, 143, -10), -Math.PI/70, 3);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(0, 152, -10), Math.PI, 20);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+//Ultimo checkpoint nesta plataforma
+
+//Ultimas adicoes de plataformas
+tiltedPlane = planeFactory(new THREE.Vector3(4, 75, -10), Math.PI, 7);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(8, 86, -10), Math.PI, 7);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(-1.3, 95, -10), Math.PI/30, 3 );
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 //Paredes verticais com extensao
 tiltedPlane = planeFactory(new THREE.Vector3(-10, 30, -10), Math.PI/2, 10);
 cena.add(tiltedPlane);
 planes.push(tiltedPlane);
-tiltedPlane = planeFactory(new THREE.Vector3(-10, 40, -10), Math.PI/2, 10);
+tiltedPlane = planeFactory(new THREE.Vector3(-10, 38.25, -10), Math.PI/2, 10);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+//*//
+tiltedPlane = planeFactory(new THREE.Vector3(-13, 73, -10), Math.PI/2, 2);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+tiltedPlane = planeFactory(new THREE.Vector3(-14, 73, -10), Math.PI/2, 2);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+tiltedPlane = planeFactory(new THREE.Vector3(-15, 73, -10), Math.PI/2, 2);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+tiltedPlane = planeFactory(new THREE.Vector3(-17, 73, -10), Math.PI/2, 2);
 cena.add(tiltedPlane);
 planes.push(tiltedPlane);
 
-let tiltedPlaneGoThrough = planeFactoryGoThrough(new THREE.Vector3(15, 25, -10), -Math.PI/2, 10);
-cena.add(tiltedPlaneGoThrough);
-planes.push(tiltedPlaneGoThrough);
+tiltedPlane = planeFactory(new THREE.Vector3(15, 135, -10), Math.PI/2, 30);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+tiltedPlane = planeFactory(new THREE.Vector3(0, 90, -10), Math.PI/2, 10);
+cena.add(tiltedPlane);
+planes.push(tiltedPlane);
+
+//Se tiverem algum problema com as plataformas, podem dar spawn ao Mario na altura que acharem melhor
+//e depois dai podem ver qual linha de codigo corresponde a cada plataforma
+
 
